@@ -1,0 +1,17 @@
+import { Router } from "express";
+import { upload } from "../lib/multer.js";
+import { allArtists, artistDetails, artistLogin, availableTickets, concertDetails, createConcert, currentLoggedUser, gatherAllConcertDetails, ticketBooking, userLogin, userSignUp } from "../controllers/index.js";
+import { verify } from "../lib/middleware.js";
+const router = Router();
+router.route("/user/signup").post(userSignUp);
+router.route("/user").post(userLogin);
+router.route("/artist").post(upload.single("image"),artistLogin);
+router.route("/ticket/buy/:concertId").post(verify,ticketBooking);
+router.route("/ticket/available/:concertId").get(verify,availableTickets);
+router.route("/concert/:concertId").get(verify,concertDetails);
+router.route("/concerts").get(verify,gatherAllConcertDetails);
+router.route("/concert/:artistId").post( upload.single("poster"),createConcert);
+router.route("/artists").get(allArtists);
+router.route("/artist/:id").get(artistDetails);
+router.route("/user/current").get(verify , currentLoggedUser);
+export {router};

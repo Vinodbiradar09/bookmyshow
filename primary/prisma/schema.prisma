@@ -1,0 +1,107 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String        @id @default(uuid())
+  email         String        @unique
+  password      String
+  name          String?
+  phone         String        @unique
+  createdAt     DateTime      @default(now())
+  refreshTokens String?       @unique
+  tickets       Ticket[]
+  reservations  Reservation[]
+}
+
+model Artist {
+  id       String    @id @default(uuid())
+  name     String?
+  bio      String?
+  image    String?
+  email    String?   @unique
+  concerts Concert[]
+}
+
+model Concert {
+  id               String        @id @default(uuid())
+  name             String?
+  description      String?
+  location         String?
+  date             DateTime
+  startTime        DateTime?
+  endTime          DateTime?
+  totalTickets     Int
+  availableTickets Int
+  ticketPrice      Int
+  poster           String?
+  artistId         String?
+  artist           Artist?       @relation(fields: [artistId], references: [id])
+  tickets          Ticket[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  reservations     Reservation[]
+
+  @@index([artistId])
+  @@index([date])
+}
+
+model Ticket {
+  id             String       @id @default(uuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  concertId      String
+  concert        Concert      @relation(fields: [concertId], references: [id])
+  qty            Int
+  status         TicketStatus @default(PENDING)
+  pricePerTicket Int
+  totalPaid      Int
+  idempotencyKey String?      @unique
+  confirmedAt    DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([concertId])
+  @@index([userId])
+}
+
+model Reservation {
+  id             String            @id @default(uuid())
+  concertId      String
+  concert        Concert           @relation(fields: [concertId], references: [id])
+  userId         String
+  user           User              @relation(fields: [userId], references: [id])
+  qty            Int
+  status         ReservationStatus @default(ACTIVE)
+  idempotencyKey String?           @unique
+  meta           Json?
+  createdAt      DateTime          @default(now())
+  expiresAt      DateTime
+  settledAt      DateTime?
+
+  @@index([concertId, expiresAt])
+  @@index([userId])
+}
+
+enum TicketStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  REFUNDED
+}
+
+enum ReservationStatus {
+  ACTIVE
+  SETTLED
+  EXPIRED
+  CANCELLED
+}
