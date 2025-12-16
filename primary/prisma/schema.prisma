@@ -20,6 +20,7 @@ model User {
   phone         String        @unique
   createdAt     DateTime      @default(now())
   refreshTokens String?       @unique
+  tokenVersion  Int?           @default(0)
   tickets       Ticket[]
   reservations  Reservation[]
 }

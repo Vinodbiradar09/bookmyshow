@@ -5,11 +5,8 @@ import { prisma } from "./prisma.js";
 const verify = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const token =
-      req.cookies?.accessToken ||
-      req.header("Authorization")?.replace("Bearer ", "");
-    if (!token) {
-      throw new Error("Unauthorized User's request");
-    }
+      req.cookies?.accessToken;
+    if (!token) return res.status(401).json({ message: "Unauthorized" , success : false });
     const decoded = jwt.verify(
       token,
       process.env.ACCESS_TOKEN_SECRET!

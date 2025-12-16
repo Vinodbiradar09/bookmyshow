@@ -1,6 +1,8 @@
 import jwt from "jsonwebtoken";
 import "dotenv/config";
 import {prisma} from "../lib/prisma.js";
+import crypto from "crypto";
+
 const generateAccessToken = async( id : string , email : string)=>{
     const secret = process.env.ACCESS_TOKEN_SECRET;
     const expiry = process.env.ACCESS_TOKEN_EXPIRY;
@@ -57,8 +59,32 @@ const generateAccessAndRefreshTokens = async( userId : string)=>{
         throw new Error("error in generating the tokens");
     }
 }
+
+export const signAccessToken = (payload: {
+  id: string;
+  tokenVersion: number;
+}) => {
+  return jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET!, {
+    expiresIn: process.env.ACCESS_TOKEN_EXPIRY,
+  } as jwt.SignOptions);
+};
+
+export const signRefreshToken = (payload: {
+  id: string;
+  tokenVersion: number;
+}) => {
+  return jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET!, {
+    expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
+  } as jwt.SignOptions);
+};
+
+export const hashToken = (token: string) => {
+  return crypto.createHash("sha256").update(token).digest("hex");
+};
+
 const options = {
     httpOnly: true,
     secure: true,
+    sameSite: "strict" as const,
 }
 export{generateAccessToken , generateRefreshToken , generateAccessAndRefreshTokens , options};
