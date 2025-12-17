@@ -471,7 +471,7 @@ const concertDetails = async (req: Request, res: Response) => {
       return res.status(200).json({
         message: "successfully got the concert details",
         success: true,
-        concert: cache,
+        concert: JSON.parse(cache),
       });
     }
     const concert = await prisma.concert.findUnique({
@@ -579,6 +579,97 @@ const gatherAllConcertDetails = async (req: Request, res: Response) => {
     });
   }
 };
+const allArtists = async (req: Request, res: Response) => {
+  try {
+    const cache = await redis.get(`artists:all`);
+    if(cache){
+      return res.status(200).json({
+        message : "artist found successfully",
+        success : true,
+        artists : cache,
+      })
+    }
+    const artists = await prisma.artist.findMany({
+      select: {
+        id: true,
+        name: true,
+        bio: true,
+        image: true,
+      },
+    });
+    if (!artists || artists.length === 0) {
+      return res.status(400).json({
+        message: "no artist found",
+        success: false,
+      });
+    }
+    await redis.set(`artists:all` , JSON.stringify(artists));
+    return res.status(200).json({
+      message: "artists found successfully",
+      success: true,
+      artists,
+    });
+  } catch (error) {
+    console.log("internal server error", error);
+    return res.status(500).json({
+      message: "internal server error",
+      success: false,
+    });
+  }
+};
+const artistDetails = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({
+        message: "slug required",
+        success: false,
+      });
+    }
+    const artist = await prisma.artist.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        id: true,
+        name: true,
+        bio: true,
+        image: true,
+      },
+    });
+    if (!artist || artist === undefined || artist === null) {
+      return res.status(404).json({
+        message: "artist not found",
+        success: false,
+      });
+    }
+    return res.status(200).json({
+      message: "artist found successfully",
+      success: true,
+      artist,
+    });
+  } catch (error) {
+    console.log("internal server error", error);
+    return res.status(500).json({
+      message: "internal server error",
+      success: false,
+    });
+  }
+};
+const currentLoggedUser = async (req: Request, res: Response) => {
+  try {
+    const user = req.user;
+    return res
+      .status(200)
+      .json({ message: "current logged user accessed", success: true, user });
+  } catch (error) {
+    console.log("failed to access the current logged user", error);
+    return res.status(500).json({
+      message: "failed to access the current logged user",
+      success: false,
+    });
+  }
+};
 const createConcert = async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
@@ -675,97 +766,6 @@ const createConcert = async (req: Request, res: Response) => {
     });
   }
 };
-const allArtists = async (req: Request, res: Response) => {
-  try {
-    const cache = await redis.get(`artists:all`);
-    if(cache){
-      return res.status(200).json({
-        message : "artist found successfully",
-        success : true,
-        artists : cache,
-      })
-    }
-    const artists = await prisma.artist.findMany({
-      select: {
-        id: true,
-        name: true,
-        bio: true,
-        image: true,
-      },
-    });
-    if (!artists || artists.length === 0) {
-      return res.status(400).json({
-        message: "no artist found",
-        success: false,
-      });
-    }
-    await redis.set(`artists:all` , JSON.stringify(artists));
-    return res.status(200).json({
-      message: "artists found successfully",
-      success: true,
-      artists,
-    });
-  } catch (error) {
-    console.log("internal server error", error);
-    return res.status(500).json({
-      message: "internal server error",
-      success: false,
-    });
-  }
-};
-const artistDetails = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    if (!id) {
-      return res.status(400).json({
-        message: "slug required",
-        success: false,
-      });
-    }
-    const artist = await prisma.artist.findUnique({
-      where: {
-        id,
-      },
-      select: {
-        id: true,
-        name: true,
-        bio: true,
-        image: true,
-      },
-    });
-    if (!artist || artist === undefined || artist === null) {
-      return res.status(404).json({
-        message: "artist not found",
-        success: false,
-      });
-    }
-    return res.status(200).json({
-      message: "artist found successfully",
-      success: true,
-      artist,
-    });
-  } catch (error) {
-    console.log("internal server error", error);
-    return res.status(500).json({
-      message: "internal server error",
-      success: false,
-    });
-  }
-};
-const currentLoggedUser = async (req: Request, res: Response) => {
-  try {
-    const user = req.user;
-    return res
-      .status(200)
-      .json({ message: "current logged user accessed", success: true, user });
-  } catch (error) {
-    console.log("failed to access the current logged user", error);
-    return res.status(500).json({
-      message: "failed to access the current logged user",
-      success: false,
-    });
-  }
-};
 export {
   userSignUp,
   userLogin,
@@ -774,8 +774,8 @@ export {
   availableTickets,
   concertDetails,
   gatherAllConcertDetails,
-  createConcert,
   allArtists,
   artistDetails,
   currentLoggedUser,
+  createConcert
 };
