@@ -206,19 +206,24 @@ const ticketBooking = async (req: Request, res: Response) => {
         .json({ message: "Idempotency key is required", success: false });
     }
 
-    const validConcert = await prisma.concert.findUnique({
+    let cacheConcert : any = await redis.get(`concert:${concertId}:det`);
+    let validConcert;
+    if(!cacheConcert){
+      console.log("cache miss");
+      validConcert = await prisma.concert.findUnique({
       where: { id: concertId },
     });
-
-    if (!validConcert) {
+     if (!validConcert) {
       return res
         .status(404)
         .json({ message: "Concert not found", success: false });
     }
+    await redis.set(`concert:${validConcert.id}:det` , JSON.stringify(validConcert));
+    }
 
     const reservationId = uuidv4();
     const ttl = 300;
-    const totalTicketAmount = validConcert.ticketPrice * qty;
+    const totalTicketAmount = cacheConcert?.ticketPrice ?? validConcert?.ticketPrice! * qty;
     const stockKey = `concert:${concertId}:stock`;
     const reservationKey = `reservation:${reservationId}`;
     const idemKey = `idempotency:${idempotencyKey}`;
@@ -313,7 +318,8 @@ const ticketBooking = async (req: Request, res: Response) => {
 const ticketPayment = async (req: Request, res: Response) => {
   try {
     const user = req.user;
-    const { amount, reservationId } = req.body;
+    const {reservationId} = req.params;
+    const { amount } = req.body;
     if (!user) {
       return res.status(401).json({
         message: "unauthorized",
@@ -416,7 +422,7 @@ const availableTickets = async (req: Request, res: Response) => {
     }
     // check the redis first
     const tickets = await redis.get(`concert:${concertId}:stock`);
-    if (tickets && Number(tickets) !== 0) {
+    if (tickets) {
       return res.status(200).json({
         message: "the available tickets",
         success: true,
@@ -626,6 +632,14 @@ const artistDetails = async (req: Request, res: Response) => {
         success: false,
       });
     }
+    const cache = await redis.get(`artist:${id}:detail`);
+    if(cache){
+      return res.status(200).json({
+        message : "artist details got successfully",
+        success : true,
+        artist : JSON.parse(cache),
+      })
+    }
     const artist = await prisma.artist.findUnique({
       where: {
         id,
@@ -643,6 +657,7 @@ const artistDetails = async (req: Request, res: Response) => {
         success: false,
       });
     }
+    await redis.set(`artist:${artist.id}:detail` , JSON.stringify(artist));
     return res.status(200).json({
       message: "artist found successfully",
       success: true,
@@ -777,5 +792,6 @@ export {
   allArtists,
   artistDetails,
   currentLoggedUser,
-  createConcert
+  createConcert,
+  ticketPayment
 };
