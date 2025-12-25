@@ -78,7 +78,7 @@ model Ticket {
 model Reservation {
   id             String            @id @default(uuid())
   concertId      String
-  concert        Concert           @relation(fields: [concertId], references: [id])
+  concert        Concert           @relation(fields: [concertId], references: [id] ,  onDelete: Cascade)
   userId         String
   user           User              @relation(fields: [userId], references: [id])
   qty            Int

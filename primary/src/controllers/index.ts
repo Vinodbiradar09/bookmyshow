@@ -781,6 +781,25 @@ const createConcert = async (req: Request, res: Response) => {
     });
   }
 };
+
+const delManyConcerts = async(req : Request , res : Response)=>{
+  const body = req.body;
+  if(!Array.isArray(body)) return res.status(411).json({message : "invalid data structure" , success : false});
+  const set = new Set(body);
+  const idArr = [...set];
+  const count = await prisma.reservation.count({
+    where : {id : {in : idArr}}
+  })
+  if(count > 0){
+    return res.status(400).json({message : "reservation are still active can't delete the concert" , success : false})
+  }
+  await prisma.concert.deleteMany({
+    where : {
+      id : { in : idArr},
+    }
+  })
+  return res.status(200).json({message : "all the concerts are deleted" , success : true});
+}
 export {
   userSignUp,
   userLogin,
@@ -793,5 +812,6 @@ export {
   artistDetails,
   currentLoggedUser,
   createConcert,
-  ticketPayment
+  ticketPayment,
+  delManyConcerts
 };

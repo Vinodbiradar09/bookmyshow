@@ -12,6 +12,8 @@ cloudinary.config(
 )
 
 export const uploadOnCloudinaryBuffer = async (buffer : Buffer , mimetype : string)=>{
+    // console.log("buffer" ,buffer);
+    // console.log("mime" , mimetype);
     try {
         if(!buffer) return null; 
         const base64String = buffer.toString("base64");
@@ -19,6 +21,9 @@ export const uploadOnCloudinaryBuffer = async (buffer : Buffer , mimetype : stri
         const response = await cloudinary.uploader.upload(dataURI , {resource_type : "auto"});
         return response;
     } catch (error) {
+        if(error instanceof Error){
+            console.log("error is" , error.message);
+        }
         console.error("Cloudinary upload error:", error);
         return null;
     }
