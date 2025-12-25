@@ -8,6 +8,7 @@ import { generateAccessAndRefreshTokens, options } from "../lib/tokens.js";
 import { redis, luaScripts } from "../redis/index.js";
 import { v4 as uuidv4 } from "uuid";
 import { paymentSucceeded, reservationCreated } from "../kafka/producer.js";
+import { Prisma } from "@prisma/client";
 const userSignUp = async (req: Request, res: Response) => {
   try {
     const body: User = req.body;
@@ -206,24 +207,28 @@ const ticketBooking = async (req: Request, res: Response) => {
         .json({ message: "Idempotency key is required", success: false });
     }
 
-    let cacheConcert : any = await redis.get(`concert:${concertId}:det`);
+    let cacheConcert: any = await redis.get(`concert:${concertId}:det`);
     let validConcert;
-    if(!cacheConcert){
+    if (!cacheConcert) {
       console.log("cache miss");
       validConcert = await prisma.concert.findUnique({
-      where: { id: concertId },
-    });
-     if (!validConcert) {
-      return res
-        .status(404)
-        .json({ message: "Concert not found", success: false });
-    }
-    await redis.set(`concert:${validConcert.id}:det` , JSON.stringify(validConcert));
+        where: { id: concertId },
+      });
+      if (!validConcert) {
+        return res
+          .status(404)
+          .json({ message: "Concert not found", success: false });
+      }
+      await redis.set(
+        `concert:${validConcert.id}:det`,
+        JSON.stringify(validConcert)
+      );
     }
 
     const reservationId = uuidv4();
     const ttl = 300;
-    const totalTicketAmount = cacheConcert?.ticketPrice ?? validConcert?.ticketPrice! * qty;
+    const totalTicketAmount =
+      cacheConcert?.ticketPrice ?? validConcert?.ticketPrice! * qty;
     const stockKey = `concert:${concertId}:stock`;
     const reservationKey = `reservation:${reservationId}`;
     const idemKey = `idempotency:${idempotencyKey}`;
@@ -318,7 +323,7 @@ const ticketBooking = async (req: Request, res: Response) => {
 const ticketPayment = async (req: Request, res: Response) => {
   try {
     const user = req.user;
-    const {reservationId} = req.params;
+    const { reservationId } = req.params;
     const { amount } = req.body;
     if (!user) {
       return res.status(401).json({
@@ -588,12 +593,12 @@ const gatherAllConcertDetails = async (req: Request, res: Response) => {
 const allArtists = async (req: Request, res: Response) => {
   try {
     const cache = await redis.get(`artists:all`);
-    if(cache){
+    if (cache) {
       return res.status(200).json({
-        message : "artist found successfully",
-        success : true,
-        artists : cache,
-      })
+        message: "artist found successfully",
+        success: true,
+        artists: cache,
+      });
     }
     const artists = await prisma.artist.findMany({
       select: {
@@ -609,7 +614,7 @@ const allArtists = async (req: Request, res: Response) => {
         success: false,
       });
     }
-    await redis.set(`artists:all` , JSON.stringify(artists));
+    await redis.set(`artists:all`, JSON.stringify(artists));
     return res.status(200).json({
       message: "artists found successfully",
       success: true,
@@ -633,12 +638,12 @@ const artistDetails = async (req: Request, res: Response) => {
       });
     }
     const cache = await redis.get(`artist:${id}:detail`);
-    if(cache){
+    if (cache) {
       return res.status(200).json({
-        message : "artist details got successfully",
-        success : true,
-        artist : JSON.parse(cache),
-      })
+        message: "artist details got successfully",
+        success: true,
+        artist: JSON.parse(cache),
+      });
     }
     const artist = await prisma.artist.findUnique({
       where: {
@@ -657,7 +662,7 @@ const artistDetails = async (req: Request, res: Response) => {
         success: false,
       });
     }
-    await redis.set(`artist:${artist.id}:detail` , JSON.stringify(artist));
+    await redis.set(`artist:${artist.id}:detail`, JSON.stringify(artist));
     return res.status(200).json({
       message: "artist found successfully",
       success: true,
@@ -753,17 +758,17 @@ const createConcert = async (req: Request, res: Response) => {
     });
     try {
       await Promise.all([
-       redis.set(`concert:${concert.id}:stock` , concert.totalTickets),
-       redis.del("concerts:all"),
+        redis.set(`concert:${concert.id}:stock`, concert.totalTickets),
+        redis.del("concerts:all"),
       ]);
     } catch (redisError) {
-        // rollback db 
-        await prisma.concert.delete({
-          where : {
-            id : concert.id,
-          }
-        })
-        return res.status(500).json({
+      // rollback db
+      await prisma.concert.delete({
+        where: {
+          id: concert.id,
+        },
+      });
+      return res.status(500).json({
         message: "failed to initialize concert stock",
         success: false,
       });
@@ -781,25 +786,64 @@ const createConcert = async (req: Request, res: Response) => {
     });
   }
 };
-
-const delManyConcerts = async(req : Request , res : Response)=>{
+const delManyConcerts = async (req: Request, res: Response) => {
   const body = req.body;
-  if(!Array.isArray(body)) return res.status(411).json({message : "invalid data structure" , success : false});
+  if (!Array.isArray(body))
+    return res
+      .status(411)
+      .json({ message: "invalid data structure", success: false });
   const set = new Set(body);
   const idArr = [...set];
   const count = await prisma.reservation.count({
-    where : {id : {in : idArr}}
-  })
-  if(count > 0){
-    return res.status(400).json({message : "reservation are still active can't delete the concert" , success : false})
+    where: { id: { in: idArr } },
+  });
+  if (count > 0) {
+    return res.status(400).json({
+      message: "reservation are still active can't delete the concert",
+      success: false,
+    });
   }
   await prisma.concert.deleteMany({
-    where : {
-      id : { in : idArr},
-    }
-  })
-  return res.status(200).json({message : "all the concerts are deleted" , success : true});
-}
+    where: {
+      id: { in: idArr },
+    },
+  });
+  return res
+    .status(200)
+    .json({ message: "all the concerts are deleted", success: true });
+};
+const updateConcerts = async (req: Request, res: Response) => {
+  const body = req.body;
+  if (!Array.isArray(body) || body.length === 0) {
+    return res.status(400).json({ success: false, message: "invalid ds" });
+  }
+  const ids = body.map((c) => `'${c.id}'`).join(",");
+
+  const nameCase = body
+    .filter((c) => c.name)
+    .map((c) => `WHEN '${c.id}' THEN '${c.name}'`)
+    .join(" ");
+
+  const locationCase = body
+    .filter((c) => c.location)
+    .map((c) => `WHEN '${c.id}' THEN '${c.location}'`)
+    .join(" ");
+
+  const priceCase = body
+    .filter((c) => c.ticketPrice)
+    .map((c) => `WHEN '${c.id}' THEN ${c.ticketPrice}`)
+    .join(" ");
+
+    const query = Prisma.sql` UPDATE "Concert"
+    SET
+      name = CASE id ${Prisma.raw(nameCase)} END,
+      location = CASE id ${Prisma.raw(locationCase)} END,
+      "ticketPrice" = CASE id ${Prisma.raw(priceCase)} END
+    WHERE id IN (${Prisma.raw(ids)})`;
+
+    await prisma.$executeRaw(query);
+    return res.json({ success: true , message : "all the concert details updated successfully" });
+};
 export {
   userSignUp,
   userLogin,
@@ -813,5 +857,6 @@ export {
   currentLoggedUser,
   createConcert,
   ticketPayment,
-  delManyConcerts
+  delManyConcerts,
+  updateConcerts,
 };

@@ -44,7 +44,7 @@ model Concert {
   endTime          DateTime?
   totalTickets     Int
   availableTickets Int
-  ticketPrice      Int
+  ticketPrice      Int?
   poster           String?
   artistId         String?
   artist           Artist?       @relation(fields: [artistId], references: [id])
