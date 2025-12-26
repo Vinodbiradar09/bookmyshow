@@ -814,36 +814,79 @@ const delManyConcerts = async (req: Request, res: Response) => {
 };
 const updateConcerts = async (req: Request, res: Response) => {
   const body = req.body;
+
   if (!Array.isArray(body) || body.length === 0) {
-    return res.status(400).json({ success: false, message: "invalid ds" });
+    return res.status(400).json({
+      success: false,
+      message: "Body must be a non-empty array",
+    });
   }
-  const ids = body.map((c) => `'${c.id}'`).join(",");
 
-  const nameCase = body
-    .filter((c) => c.name)
-    .map((c) => `WHEN '${c.id}' THEN '${c.name}'`)
-    .join(" ");
+  const ids = body.filter(c => c.id).map(c => `'${c.id}'`).join(",");
+  if (!ids.length) {
+    return res.status(400).json({ success: false, message: "No valid ids" });
+  }
 
-  const locationCase = body
-    .filter((c) => c.location)
-    .map((c) => `WHEN '${c.id}' THEN '${c.location}'`)
-    .join(" ");
+  const sqlCase = (column: string, formatter?: (v: any) => string) => {
+    const items = body.filter(c => c[column] !== undefined);
+    if (!items.length) return null;
 
-  const priceCase = body
-    .filter((c) => c.ticketPrice)
-    .map((c) => `WHEN '${c.id}' THEN ${c.ticketPrice}`)
-    .join(" ");
+    const col = column === "ticketPrice" ? `"ticketPrice"` : `"${column}"`;
 
-    const query = Prisma.sql` UPDATE "Concert"
-    SET
-      name = CASE id ${Prisma.raw(nameCase)} END,
-      location = CASE id ${Prisma.raw(locationCase)} END,
-      "ticketPrice" = CASE id ${Prisma.raw(priceCase)} END
-    WHERE id IN (${Prisma.raw(ids)})`;
+    const cases = items
+      .map(c => {
+        const raw =
+          formatter
+            ? formatter(c[column])
+            : typeof c[column] === "string"
+            ? `'${c[column]}'`
+            : c[column];
 
+        return `WHEN '${c.id}' THEN ${raw}`;
+      })
+      .join(" ");
+
+    return `${col} = CASE id ${cases} ELSE ${col} END`;
+  };
+
+  const parts = [
+    sqlCase("name"),
+    sqlCase("location"),
+    sqlCase("date", v => `'${new Date(v).toISOString()}'`),
+    sqlCase("startTime", v => `'${new Date(v).toISOString()}'`),
+    sqlCase("endTime", v => `'${new Date(v).toISOString()}'`),
+    sqlCase("ticketPrice"),
+  ].filter(Boolean);
+
+  if (!parts.length) {
+    return res.status(400).json({
+      success: false,
+      message: "No valid fields to update",
+    });
+  }
+
+  const query = Prisma.sql`
+    UPDATE "Concert"
+    SET ${Prisma.raw(parts.join(","))}
+    WHERE id IN (${Prisma.raw(ids)});
+  `;
+
+  try {
     await prisma.$executeRaw(query);
-    return res.json({ success: true , message : "all the concert details updated successfully" });
+
+    return res.status(200).json({
+      success: true,
+      message: "Concerts updated successfully",
+    });
+  } catch (err: any) {
+    console.log(err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Bulk update failed",
+    });
+  }
 };
+
 export {
   userSignUp,
   userLogin,
