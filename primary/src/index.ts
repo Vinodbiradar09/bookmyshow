@@ -15,6 +15,7 @@ const startServer = async()=>{
     try {
         await kafkaTopics();
         await initProducer();
+        // await initConsumer();
         console.log("Kafka initialized successfully!");
         app.listen(process.env.PORT , ()=>{
             console.log(`primary server is running at ${process.env.PORT}`);

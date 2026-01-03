@@ -12,6 +12,12 @@ interface paymentDetails {
   ticketAmount : number,
 }
 export const producer = kafka.producer();
+export const consumer = kafka.consumer({ groupId : "1"});
+
+// export const initConsumer = async()=>{
+//   await consumer.connect();
+//   console.log("consumer connected");
+// }
 export const initProducer = async () => {
   await producer.connect();
   console.log("Kafka producer connected");

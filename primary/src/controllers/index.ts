@@ -223,12 +223,13 @@ const ticketBooking = async (req: Request, res: Response) => {
         `concert:${validConcert.id}:det`,
         JSON.stringify(validConcert)
       );
+    } else {
+      validConcert = JSON.parse(cacheConcert);
     }
 
     const reservationId = uuidv4();
     const ttl = 300;
-    const totalTicketAmount =
-      cacheConcert?.ticketPrice ?? validConcert?.ticketPrice! * qty;
+    const totalTicketAmount = validConcert?.ticketPrice! * qty;
     const stockKey = `concert:${concertId}:stock`;
     const reservationKey = `reservation:${reservationId}`;
     const idemKey = `idempotency:${idempotencyKey}`;

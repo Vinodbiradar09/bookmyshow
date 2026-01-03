@@ -13,6 +13,7 @@
 local stock = tonumber(redis.call("GET", KEYS[1]))
 
 if not stock then
+  print("stock is" , stock);
   return { err = "STOCK_NOT_INITIALIZED" }
 end
 

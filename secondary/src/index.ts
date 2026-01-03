@@ -1,18 +1,12 @@
-import { prisma } from "../..//primary/dist/src/lib/prisma.js";
-import { consumerKafka , consumer} from "./consumer.js";
-// first consumer 
+import express from "express";
+import { reservationCreatedConsumer , paymentSucceededConsumer } from "./consumer.js";
+const app = express();
 
-const reservationCreatedConsumer = async ()=>{
-    try {
-       await consumer.run({
-        // @ts-ignore
-        eachMessage : async({ topic , partition, message, heartbeat, pause})=>{
-            console.log("the message is consumed " , message.value?.toString());
-        }
-       })
-    } catch (error) {
-        console.log("error in the consumer consuming the message reservationCreatedConsumer" , error);
-    }
-}
-await consumerKafka();
-reservationCreatedConsumer();
+app.use(express.json());
+app.use(express.urlencoded({extended : true}));
+
+app.listen(4002 , async()=>{
+    await reservationCreatedConsumer();
+    await paymentSucceededConsumer();
+    console.log("consumer server is running at the port 4002");
+})
