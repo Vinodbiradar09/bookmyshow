@@ -10,6 +10,9 @@ interface ticketDetails {
 interface paymentDetails {
   reservationId: string;
   userId : string,
+  idempotencyKey : string,
+  concertId : string,
+  qty : number,
   ticketAmount : number,
 }
 export const producer = kafka.producer();
@@ -42,13 +45,13 @@ const reservationCreated = async ({
   });
 };
 
-const paymentSucceeded = async({ reservationId , userId , ticketAmount} : paymentDetails)=>{
+const paymentSucceeded = async({ reservationId , userId , concertId , qty , ticketAmount , idempotencyKey} : paymentDetails)=>{
   await producer.send({
     topic : "payment.succeeded",
     messages : [
       {
         key : reservationId,
-        value : JSON.stringify({reservationId , userId , ticketAmount})
+        value : JSON.stringify({reservationId , userId , concertId , qty , ticketAmount , idempotencyKey})
       }
     ]
   })

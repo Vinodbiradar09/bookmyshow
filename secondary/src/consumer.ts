@@ -1,6 +1,6 @@
 import { prisma } from "../..//primary/dist/src/lib/prisma.js";
 import { kafka } from "../../primary/dist/src/kafka/client.js";
-import { expireReservation } from "./utils.js";
+import { expireReservation, paymentCheck } from "./utils.js";
 
 const reservationConsumer = kafka.consumer({ groupId : "secondary-service"});
 const paymentConsumer = kafka.consumer({ groupId: "payment-group" });
@@ -41,8 +41,13 @@ const paymentSucceededConsumer = async()=>{
             fromBeginning : true,
         })
         await paymentConsumer.run({
-            eachMessage : async({ topic , partition , message })=>{
-                console.log(" the message consumer of paymentSucceededConsumer" , message.value?.toString());
+            eachMessage : async({ message })=>{
+                if(!message.value) return;
+                const playload = JSON.parse(message.value.toString());
+                const { reservationId , userId , concertId , qty , ticketAmount , idempotencyKey } = playload;
+                console.log("payment" , reservationId , userId , ticketAmount , concertId , idempotencyKey , qty);
+                await paymentCheck(reservationId , userId , concertId , qty , ticketAmount , idempotencyKey);
+                console.log("payment done");
             }
         })
     } catch (error) {

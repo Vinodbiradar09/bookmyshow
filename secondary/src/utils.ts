@@ -1,6 +1,7 @@
 import { prisma } from "../../primary/dist/src/lib/prisma.js"
 import { luaScripts, redis } from "../../primary/dist/src/redis/index.js";
 import { producer } from "../../primary/dist/src/kafka/producer.js";
+
 export const expireReservation = async( reservationId: string, concertId: string, qty: number)=>{
     console.log("ressss" , reservationId);
     const reservation = await prisma.reservation.findUnique({
@@ -9,8 +10,6 @@ export const expireReservation = async( reservationId: string, concertId: string
         }
     });
     if(!reservation){
-        console.log("reservation not found" , reservation);
-        console.log("ressss" , reservationId);
         return;
     }
     
@@ -51,4 +50,64 @@ export const expireReservation = async( reservationId: string, concertId: string
     })
 }
 
+export const paymentCheck = async(  reservationId : string , userId : string , concertId : string , qty : number, ticketAmount : number , idempotencyKey : string)=>{
+    try {
+        console.log("hiii");
+        await prisma.$transaction(async( tx)=>{
+            const reservation = await tx.reservation.findUnique({
+                where : {
+                    id : reservationId,
+                    userId,
+                }
+            })
+            if(!reservation || reservation.status !== "ACTIVE") return;
 
+            await tx.ticket.create({
+                data : {
+                    userId,
+                    concertId,
+                    qty,
+                    pricePerTicket : reservation.ticketAmount!/ qty,
+                    totalPaid : ticketAmount,
+                    status : "CONFIRMED",
+                    idempotencyKey,
+                    confirmedAt : new Date(),
+                }
+            })
+
+            await tx.reservation.update({
+                where : {
+                    id :reservationId,
+                },
+                data : {
+                    status : "SETTLED",
+                    settledAt : new Date(),
+                }
+            })
+
+            await tx.concert.update({
+                where : {
+                    id : concertId,
+                },
+                data : {
+                    availableTickets : {
+                        decrement : qty,
+                    }
+                }
+            })
+
+            await producer.send({
+                topic : "ticket.issued",
+                messages : [
+                    {
+                        key : reservationId,
+                        value : JSON.stringify({reservationId}),
+                    }
+                ]
+
+            })
+        })
+    } catch (error) {
+        console.log("payment check failed" , error);
+    }
+}   

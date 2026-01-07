@@ -396,10 +396,14 @@ const ticketPayment = async (req: Request, res: Response) => {
         success: false,
       });
     }
+
     await paymentSucceeded({
       reservationId,
       userId: user.id,
+      concertId : reservation.concertId!,
+      qty : reservation.qty!,
       ticketAmount: amount,
+      idempotencyKey : reservation.idempotencyKey!
     });
     return res.status(200).json({
       message: "payment received, ticket issuance in progress",
