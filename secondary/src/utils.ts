@@ -2,9 +2,18 @@ import { prisma } from "../../primary/dist/src/lib/prisma.js"
 import { luaScripts, redis } from "../../primary/dist/src/redis/index.js";
 import { producer } from "../../primary/dist/src/kafka/producer.js";
 export const expireReservation = async( reservationId: string, concertId: string, qty: number)=>{
-    const reservation = await prisma.reservation.findUnique({where : { id : reservationId}});
-    if(!reservation) return;
-
+    console.log("ressss" , reservationId);
+    const reservation = await prisma.reservation.findUnique({
+        where : {
+            id : reservationId,
+        }
+    });
+    if(!reservation){
+        console.log("reservation not found" , reservation);
+        console.log("ressss" , reservationId);
+        return;
+    }
+    
     if(reservation.status === "SETTLED") return;
     if(reservation.status === "EXPIRED") return;
 
@@ -18,7 +27,9 @@ export const expireReservation = async( reservationId: string, concertId: string
         }
     })
 
-    await redis.eval( luaScripts.releaseTickets , 1 , `concert:${concertId}:stock` , qty);
+    const stockKey = `concert:${concertId}:stock`;
+    const reservationKey = `reservation:${reservationId}`;
+    await redis.eval( luaScripts.releaseTickets , 2 , stockKey , reservationKey , String(qty));
 
     await producer.send({
         topic : "reservation.expired",
@@ -39,3 +50,5 @@ export const expireReservation = async( reservationId: string, concertId: string
         ]
     })
 }
+
+
