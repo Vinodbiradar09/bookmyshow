@@ -5,6 +5,7 @@ interface ticketDetails {
   userId: string;
   concertId: string;
   qty: number;
+  expiresAt : string,
 }
 interface paymentDetails {
   reservationId: string;
@@ -28,13 +29,14 @@ const reservationCreated = async ({
   userId,
   concertId,
   qty,
+  expiresAt,
 }: ticketDetails) => {
   await producer.send({
     topic: "reservation.created",
     messages: [
       {
         key: concertId,
-        value: JSON.stringify({ reservationId, userId, concertId, qty }),
+        value: JSON.stringify({ reservationId, userId, concertId, qty , expiresAt}),
       },
     ],
   });

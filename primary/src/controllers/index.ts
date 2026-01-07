@@ -288,6 +288,7 @@ const ticketBooking = async (req: Request, res: Response) => {
         userId: user.id,
         concertId,
         qty,
+        expiresAt : reservation.expiresAt.toISOString(),
       });
     } catch (kafkaErr) {
       console.error("Kafka produce failed", kafkaErr);

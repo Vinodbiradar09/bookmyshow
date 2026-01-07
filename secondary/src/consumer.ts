@@ -1,19 +1,33 @@
 import { prisma } from "../..//primary/dist/src/lib/prisma.js";
 import { kafka } from "../../primary/dist/src/kafka/client.js";
+import { expireReservation } from "./utils.js";
 
 const reservationConsumer = kafka.consumer({ groupId : "secondary-service"});
 const paymentConsumer = kafka.consumer({ groupId: "payment-group" });
 
 const reservationCreatedConsumer = async ()=>{
     try {
-        console.log("hi");
         await reservationConsumer.subscribe({
             topics : ["reservation.created"],
             fromBeginning : true,
         })
        await reservationConsumer.run({
-        eachMessage : async({ topic , partition, message, heartbeat, pause})=>{
-            console.log("the message is consumed of reservationCreatedConsumer" , message.value?.toString());
+        eachMessage : async({ message })=>{
+            if(!message.value) return;
+            const playload = JSON.parse(message.value?.toString());
+            const { reservationId , userId , concertId , qty , expiresAt} = playload;
+            console.log("hey",reservationId , userId , concertId , qty , expiresAt);
+            const delay = new Date(expiresAt).getTime() - Date.now();
+            if(delay < 0){
+                console.log("already expired");
+                await expireReservation( reservationId , concertId , qty);
+                return;
+            }
+            console.log("delay" , delay);
+            setTimeout( async ()=>{
+                console.log("the delay is of" , delay);
+                await expireReservation( reservationId , concertId , qty);
+            }, delay);
         }
        })
     } catch (error) {
