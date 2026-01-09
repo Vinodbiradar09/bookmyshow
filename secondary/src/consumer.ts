@@ -20,13 +20,13 @@ const reservationCreatedConsumer = async ()=>{
             const delay = new Date(expiresAt).getTime() - Date.now();
             if(delay < 0){
                 console.log("already expired");
-                await expireReservation( reservationId , concertId , qty);
+                await expireReservation( reservationId , concertId , qty );
                 return;
             }
             console.log("delay" , delay);
             setTimeout( async ()=>{
                 console.log("the delay is of" , delay);
-                await expireReservation( reservationId , concertId , qty);
+                await expireReservation( reservationId , concertId , qty );
             }, delay);
         }
        })
@@ -46,7 +46,8 @@ const paymentSucceededConsumer = async()=>{
                 const playload = JSON.parse(message.value.toString());
                 const { reservationId , userId , concertId , qty , ticketAmount , idempotencyKey } = playload;
                 console.log("payment" , reservationId , userId , ticketAmount , concertId , idempotencyKey , qty);
-                await paymentCheck(reservationId , userId , concertId , qty , ticketAmount , idempotencyKey);
+                await Promise.all([await expireReservation(reservationId , concertId , qty) , await paymentCheck(reservationId , userId , concertId , qty , ticketAmount , idempotencyKey)]);
+                // await paymentCheck(reservationId , userId , concertId , qty , ticketAmount , idempotencyKey);
                 console.log("payment done");
             }
         })
@@ -54,4 +55,6 @@ const paymentSucceededConsumer = async()=>{
         console.log("error in the consumer of payment succeeded" , error);
     }
 }
+
+
 export { reservationCreatedConsumer , paymentSucceededConsumer};

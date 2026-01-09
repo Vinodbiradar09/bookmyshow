@@ -9,6 +9,7 @@ import { redis, luaScripts } from "../redis/index.js";
 import { v4 as uuidv4 } from "uuid";
 import { paymentSucceeded, reservationCreated } from "../kafka/producer.js";
 import { Prisma } from "@prisma/client";
+
 const userSignUp = async (req: Request, res: Response) => {
   try {
     const body: User = req.body;
@@ -66,6 +67,7 @@ const userSignUp = async (req: Request, res: Response) => {
     });
   }
 };
+
 const userLogin = async (req: Request, res: Response) => {
   try {
     const body: UserLog = req.body;
@@ -111,6 +113,7 @@ const userLogin = async (req: Request, res: Response) => {
     });
   }
 };
+
 const artistLogin = async (req: Request, res: Response) => {
   try {
     const body: Artist = req.body;
@@ -177,6 +180,7 @@ const artistLogin = async (req: Request, res: Response) => {
     });
   }
 };
+
 const ticketBooking = async (req: Request, res: Response) => {
   try {
     const user = req.user;
@@ -300,6 +304,7 @@ const ticketBooking = async (req: Request, res: Response) => {
       status: "RESERVED",
       success: true,
       message: "Tickets reserved successfully",
+      reservation,
     });
   } catch (error: any) {
     console.log("Internal server error", error?.message);
@@ -322,6 +327,7 @@ const ticketBooking = async (req: Request, res: Response) => {
       .json({ message: "Internal server error", success: false });
   }
 };
+
 const ticketPayment = async (req: Request, res: Response) => {
   try {
     const user = req.user;
@@ -417,6 +423,7 @@ const ticketPayment = async (req: Request, res: Response) => {
     });
   }
 };
+
 const availableTickets = async (req: Request, res: Response) => {
   try {
     const user = req.user;
@@ -469,6 +476,7 @@ const availableTickets = async (req: Request, res: Response) => {
     });
   }
 };
+
 const concertDetails = async (req: Request, res: Response) => {
   try {
     const user = req.user;
@@ -542,6 +550,7 @@ const concertDetails = async (req: Request, res: Response) => {
     });
   }
 };
+
 const gatherAllConcertDetails = async (req: Request, res: Response) => {
   try {
     const user = req.user;
@@ -596,6 +605,7 @@ const gatherAllConcertDetails = async (req: Request, res: Response) => {
     });
   }
 };
+
 const allArtists = async (req: Request, res: Response) => {
   try {
     const cache = await redis.get(`artists:all`);
@@ -634,6 +644,7 @@ const allArtists = async (req: Request, res: Response) => {
     });
   }
 };
+
 const artistDetails = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -682,6 +693,7 @@ const artistDetails = async (req: Request, res: Response) => {
     });
   }
 };
+
 const currentLoggedUser = async (req: Request, res: Response) => {
   try {
     const user = req.user;
@@ -696,6 +708,7 @@ const currentLoggedUser = async (req: Request, res: Response) => {
     });
   }
 };
+
 const createConcert = async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
@@ -792,6 +805,7 @@ const createConcert = async (req: Request, res: Response) => {
     });
   }
 };
+
 const delManyConcerts = async (req: Request, res: Response) => {
   const body = req.body;
   if (!Array.isArray(body))
@@ -818,6 +832,8 @@ const delManyConcerts = async (req: Request, res: Response) => {
     .status(200)
     .json({ message: "all the concerts are deleted", success: true });
 };
+
+// the below controller is for the future working 
 const updateConcerts = async (req: Request, res: Response) => {
   const body = req.body;
 

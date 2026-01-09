@@ -12,12 +12,9 @@ export const expireReservation = async( reservationId: string, concertId: string
     if(!reservation){
         return;
     }
-    
+    console.log("the reservations is " , reservation);
     if(reservation.status === "SETTLED") return;
     if(reservation.status === "EXPIRED") return;
-
-    // await Promise.all([ await prisma.reservation.update({where : { id : reservationId} , data : { status : "EXPIRED"}})])
-
     await prisma.reservation.update({
         where : {
             id : reservationId,
@@ -25,34 +22,34 @@ export const expireReservation = async( reservationId: string, concertId: string
             status : "EXPIRED",
         }
     })
-
     const stockKey = `concert:${concertId}:stock`;
     const reservationKey = `reservation:${reservationId}`;
+
     await redis.eval( luaScripts.releaseTickets , 2 , stockKey , reservationKey , String(qty));
 
-    await producer.send({
-        topic : "reservation.expired",
-        messages : [
-            {
-                key : reservationId,
-                value : JSON.stringify({reservationId})
-            }
-        ]
-    })
-    await producer.send({
-        topic : "reservation.released",
-        messages : [
-            {
-                key : concertId,
-                value : JSON.stringify({concertId , qty}),
-            }
-        ]
-    })
+    // await producer.send({
+    //     topic : "reservation.expired",
+    //     messages : [
+    //         {
+    //             key : reservationId,
+    //             value : JSON.stringify({reservationId})
+    //         }
+    //     ]
+    // })
+
+    // await producer.send({
+    //     topic : "reservation.released",
+    //     messages : [
+    //         {
+    //             key : concertId,
+    //             value : JSON.stringify({concertId , qty}),
+    //         }
+    //     ]
+    // })
 }
 
 export const paymentCheck = async(  reservationId : string , userId : string , concertId : string , qty : number, ticketAmount : number , idempotencyKey : string)=>{
     try {
-        console.log("hiii");
         await prisma.$transaction(async( tx)=>{
             const reservation = await tx.reservation.findUnique({
                 where : {
@@ -60,8 +57,7 @@ export const paymentCheck = async(  reservationId : string , userId : string , c
                     userId,
                 }
             })
-            if(!reservation || reservation.status !== "ACTIVE") return;
-
+            if(!reservation || reservation.status !== "PAYMENT_PENDING") return;
             await tx.ticket.create({
                 data : {
                     userId,
@@ -95,7 +91,7 @@ export const paymentCheck = async(  reservationId : string , userId : string , c
                     }
                 }
             })
-
+        
             await producer.send({
                 topic : "ticket.issued",
                 messages : [
@@ -111,3 +107,4 @@ export const paymentCheck = async(  reservationId : string , userId : string , c
         console.log("payment check failed" , error);
     }
 }   
+
