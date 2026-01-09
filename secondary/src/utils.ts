@@ -3,7 +3,6 @@ import { luaScripts, redis } from "../../primary/dist/src/redis/index.js";
 import { producer } from "../../primary/dist/src/kafka/producer.js";
 
 export const expireReservation = async( reservationId: string, concertId: string, qty: number)=>{
-    console.log("ressss" , reservationId);
     const reservation = await prisma.reservation.findUnique({
         where : {
             id : reservationId,
@@ -57,6 +56,7 @@ export const paymentCheck = async(  reservationId : string , userId : string , c
                     userId,
                 }
             })
+            console.log("reservation of payment check" , reservation);
             if(!reservation || reservation.status !== "PAYMENT_PENDING") return;
             await tx.ticket.create({
                 data : {
@@ -80,7 +80,7 @@ export const paymentCheck = async(  reservationId : string , userId : string , c
                     settledAt : new Date(),
                 }
             })
-
+            console.log(" i am running");
             await tx.concert.update({
                 where : {
                     id : concertId,
@@ -91,7 +91,7 @@ export const paymentCheck = async(  reservationId : string , userId : string , c
                     }
                 }
             })
-        
+            console.log(" i am completed");
             await producer.send({
                 topic : "ticket.issued",
                 messages : [

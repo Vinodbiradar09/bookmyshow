@@ -26,6 +26,12 @@ const reservationCreatedConsumer = async ()=>{
             console.log("delay" , delay);
             setTimeout( async ()=>{
                 console.log("the delay is of" , delay);
+                const reservation = await prisma.reservation.findUnique({
+                    where : {
+                        id : reservationId,
+                    }
+                })
+                if(reservation?.status === "SETTLED") return;
                 await expireReservation( reservationId , concertId , qty );
             }, delay);
         }
@@ -46,8 +52,7 @@ const paymentSucceededConsumer = async()=>{
                 const playload = JSON.parse(message.value.toString());
                 const { reservationId , userId , concertId , qty , ticketAmount , idempotencyKey } = playload;
                 console.log("payment" , reservationId , userId , ticketAmount , concertId , idempotencyKey , qty);
-                await Promise.all([await expireReservation(reservationId , concertId , qty) , await paymentCheck(reservationId , userId , concertId , qty , ticketAmount , idempotencyKey)]);
-                // await paymentCheck(reservationId , userId , concertId , qty , ticketAmount , idempotencyKey);
+                await paymentCheck(reservationId , userId , concertId , qty , ticketAmount , idempotencyKey);
                 console.log("payment done");
             }
         })
