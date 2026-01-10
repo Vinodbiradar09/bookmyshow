@@ -4,19 +4,20 @@ import { producer } from "../../primary/dist/src/kafka/producer.js";
 import { generateTicketQRToken } from "../../primary/dist/src/lib/tokens.js";
 import QRCode from "qrcode";
 import { resend } from "./index.js";
-import { emailHTML } from "./extra.js";
+import { base64ToBuffer, emailHTML } from "./extra.js";
+import { uploadOnCloudinaryBuffer } from "../../primary/dist/src/lib/cloudinary.js";
 
 export interface Ticket {
-  id : string,
-  userId : string,
-  concertId : string,
-  qty : number,
-  status : string,
-  pricePerTicket : number,
-  totalPaid : number,
-  idempotencyKey : string,
-  confirmedAt : Date,
-  createdAt : Date,
+  id: string;
+  userId: string;
+  concertId: string;
+  qty: number;
+  status: string;
+  pricePerTicket: number;
+  totalPaid: number;
+  idempotencyKey: string;
+  confirmedAt: Date;
+  createdAt: Date;
 }
 
 export const expireReservation = async (
@@ -111,7 +112,7 @@ export const paymentCheck = async (
         messages: [
           {
             key: reservationId,
-            value: JSON.stringify({ ticketId , userId , ticket}),
+            value: JSON.stringify({ ticketId, userId, ticket }),
           },
         ],
       });
@@ -121,55 +122,82 @@ export const paymentCheck = async (
   }
 };
 
-export const sendTicketToEmail = async( ticket : Ticket )=>{
+export const sendTicketToEmail = async (ticket: Ticket) => {
   try {
-    const token = await generateTicketQRToken(ticket.id , ticket.userId);
+    const token = await generateTicketQRToken(ticket.id, ticket.userId);
     const scanURL = `http://localhost:3006/api/v2/ticket/scan?token=${token}`;
-    const qrImage = await QRCode.toDataURL(scanURL);
+    const qrBase64 = await QRCode.toDataURL(scanURL);
+    const qrBuffer = base64ToBuffer(qrBase64);
+    const uploadQR = await uploadOnCloudinaryBuffer(qrBuffer , "image/png");
+    if(!uploadQR){
+      throw new Error("QR upload failed");
+    }
+    const qrUrl = uploadQR.secure_url;
     const ticketDetails = await prisma.ticket.findUnique({
-      where : {
-        id : ticket.id,
+      where: {
+        id: ticket.id,
       },
-      select : {
-        concert : {
-          select : {
-            id : true,
-            name : true,
-            description : true,
-            artist : {
-              select : {
-                name : true,
-              }
+      select: {
+        concert: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            date : true,
+            startTime : true,
+            endTime : true,
+            location : true,
+            poster : true,
+            artist: {
+              select: {
+                name: true,
+              },
             },
-          }
+          },
         },
-        totalPaid : true,
-        qty : true,
-        status : true,
-        user : {
-          select : {
-            name : true,
-            email : true,
-            phone : true,
-          }
-        }
-      }
-    })
-    if(!ticketDetails || !ticketDetails.concert || !ticketDetails.user) throw new Error("Error in fetching ticket details");
-    console.log("ticket details" , ticketDetails);
-    const html = emailHTML( ticketDetails.user.name! , ticketDetails.user.email , ticketDetails.user.phone , qrImage , ticketDetails.concert.name! , ticketDetails.concert.description! , ticketDetails.concert.artist?.name! , ticketDetails.qty , ticketDetails.totalPaid , ticketDetails.status);
-    const { data , error } = await resend.emails.send({
-      from: 'BookMyShow <vinod@skmayya.me>',
+        totalPaid: true,
+        qty: true,
+        status: true,
+        user: {
+          select: {
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
+    });
+    if (!ticketDetails || !ticketDetails.concert || !ticketDetails.user)
+      throw new Error("Error in fetching ticket details");
+    console.log("ticket details", ticketDetails);
+    const html = emailHTML(
+      ticketDetails.user.name!,
+      ticketDetails.user.email,
+      ticketDetails.user.phone,
+      qrUrl,
+      ticketDetails.concert.name!,
+      ticketDetails.concert.description!,
+      ticketDetails.concert.date,
+      ticketDetails.concert.startTime!, 
+      ticketDetails.concert.endTime!,
+      ticketDetails.concert.location!,
+      ticketDetails.concert.poster!,
+      ticketDetails.concert.artist?.name!,
+      ticketDetails.qty,
+      ticketDetails.totalPaid,
+      ticketDetails.status
+    );
+    const { data, error } = await resend.emails.send({
+      from: "BookMyShow <vinod@skmayya.me>",
       to: ticketDetails?.user.email,
-      subject : "Your Tickets",
+      subject: "Your Tickets",
       html,
-    })
+    });
 
-    if(error){
+    if (error) {
       throw new Error("Failed to send the tickets to email");
     }
-
   } catch (error) {
-    console.log(" failed to send email" , error);
+    console.log(" failed to send email", error);
   }
-}
+};
