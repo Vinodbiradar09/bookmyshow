@@ -4,6 +4,7 @@ import { producer } from "../../primary/dist/src/kafka/producer.js";
 import { generateTicketQRToken } from "../../primary/dist/src/lib/tokens.js";
 import QRCode from "qrcode";
 import { resend } from "./index.js";
+import { emailHTML } from "./extra.js";
 
 export interface Ticket {
   id : string,
@@ -125,17 +126,6 @@ export const sendTicketToEmail = async( ticket : Ticket )=>{
     const token = await generateTicketQRToken(ticket.id , ticket.userId);
     const scanURL = `http://localhost:3006/api/v2/ticket/scan?token=${token}`;
     const qrImage = await QRCode.toDataURL(scanURL);
-    const userEmail = await prisma.user.findUnique({
-      where : {
-        id : ticket.userId,
-      },
-      select : {
-        email : true,
-        name : true,
-        phone : true,
-      }
-    })
-    if(!userEmail) return;
     const ticketDetails = await prisma.ticket.findUnique({
       where : {
         id : ticket.id,
@@ -156,14 +146,23 @@ export const sendTicketToEmail = async( ticket : Ticket )=>{
         totalPaid : true,
         qty : true,
         status : true,
+        user : {
+          select : {
+            name : true,
+            email : true,
+            phone : true,
+          }
+        }
       }
     })
-
+    if(!ticketDetails || !ticketDetails.concert || !ticketDetails.user) throw new Error("Error in fetching ticket details");
+    console.log("ticket details" , ticketDetails);
+    const html = emailHTML( ticketDetails.user.name! , ticketDetails.user.email , ticketDetails.user.phone , qrImage , ticketDetails.concert.name! , ticketDetails.concert.description! , ticketDetails.concert.artist?.name! , ticketDetails.qty , ticketDetails.totalPaid , ticketDetails.status);
     const { data , error } = await resend.emails.send({
-      from: 'vinod <vinod@skmayya.me>',
-      to: userEmail?.email,
+      from: 'BookMyShow <vinod@skmayya.me>',
+      to: ticketDetails?.user.email,
       subject : "Your Tickets",
-      html : "<strong>it works!</strong>",
+      html,
     })
 
     if(error){
@@ -171,6 +170,6 @@ export const sendTicketToEmail = async( ticket : Ticket )=>{
     }
 
   } catch (error) {
-    console.log(" failed to send email ");
+    console.log(" failed to send email" , error);
   }
 }
