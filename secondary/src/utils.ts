@@ -1,110 +1,176 @@
-import { prisma } from "../../primary/dist/src/lib/prisma.js"
+import { prisma } from "../../primary/dist/src/lib/prisma.js";
 import { luaScripts, redis } from "../../primary/dist/src/redis/index.js";
 import { producer } from "../../primary/dist/src/kafka/producer.js";
+import { generateTicketQRToken } from "../../primary/dist/src/lib/tokens.js";
+import QRCode from "qrcode";
+import { resend } from "./index.js";
 
-export const expireReservation = async( reservationId: string, concertId: string, qty: number)=>{
-    const reservation = await prisma.reservation.findUnique({
-        where : {
-            id : reservationId,
-        }
-    });
-    if(!reservation){
-        return;
-    }
-    console.log("the reservations is " , reservation);
-    if(reservation.status === "SETTLED") return;
-    if(reservation.status === "EXPIRED") return;
-    await prisma.reservation.update({
-        where : {
-            id : reservationId,
-        },data : {
-            status : "EXPIRED",
-        }
-    })
-    const stockKey = `concert:${concertId}:stock`;
-    const reservationKey = `reservation:${reservationId}`;
-
-    await redis.eval( luaScripts.releaseTickets , 2 , stockKey , reservationKey , String(qty));
-
-    // await producer.send({
-    //     topic : "reservation.expired",
-    //     messages : [
-    //         {
-    //             key : reservationId,
-    //             value : JSON.stringify({reservationId})
-    //         }
-    //     ]
-    // })
-
-    // await producer.send({
-    //     topic : "reservation.released",
-    //     messages : [
-    //         {
-    //             key : concertId,
-    //             value : JSON.stringify({concertId , qty}),
-    //         }
-    //     ]
-    // })
+export interface Ticket {
+  id : string,
+  userId : string,
+  concertId : string,
+  qty : number,
+  status : string,
+  pricePerTicket : number,
+  totalPaid : number,
+  idempotencyKey : string,
+  confirmedAt : Date,
+  createdAt : Date,
 }
 
-export const paymentCheck = async(  reservationId : string , userId : string , concertId : string , qty : number, ticketAmount : number , idempotencyKey : string)=>{
-    try {
-        await prisma.$transaction(async( tx)=>{
-            const reservation = await tx.reservation.findUnique({
-                where : {
-                    id : reservationId,
-                    userId,
-                }
-            })
-            console.log("reservation of payment check" , reservation);
-            if(!reservation || reservation.status !== "PAYMENT_PENDING") return;
-            await tx.ticket.create({
-                data : {
-                    userId,
-                    concertId,
-                    qty,
-                    pricePerTicket : reservation.ticketAmount!/ qty,
-                    totalPaid : ticketAmount,
-                    status : "CONFIRMED",
-                    idempotencyKey,
-                    confirmedAt : new Date(),
-                }
-            })
+export const expireReservation = async (
+  reservationId: string,
+  concertId: string,
+  qty: number
+) => {
+  const reservation = await prisma.reservation.findUnique({
+    where: {
+      id: reservationId,
+    },
+  });
+  if (!reservation) {
+    return;
+  }
+  console.log("the reservations is ", reservation);
+  if (reservation.status === "SETTLED") return;
+  if (reservation.status === "EXPIRED") return;
+  await prisma.reservation.update({
+    where: {
+      id: reservationId,
+    },
+    data: {
+      status: "EXPIRED",
+    },
+  });
+  const stockKey = `concert:${concertId}:stock`;
+  const reservationKey = `reservation:${reservationId}`;
 
-            await tx.reservation.update({
-                where : {
-                    id :reservationId,
-                },
-                data : {
-                    status : "SETTLED",
-                    settledAt : new Date(),
-                }
-            })
-            console.log(" i am running");
-            await tx.concert.update({
-                where : {
-                    id : concertId,
-                },
-                data : {
-                    availableTickets : {
-                        decrement : qty,
-                    }
-                }
-            })
-            console.log(" i am completed");
-            await producer.send({
-                topic : "ticket.issued",
-                messages : [
-                    {
-                        key : reservationId,
-                        value : JSON.stringify({reservationId}),
-                    }
-                ]
+  await redis.eval(
+    luaScripts.releaseTickets,
+    2,
+    stockKey,
+    reservationKey,
+    String(qty)
+  );
+};
 
-            })
-        })
-    } catch (error) {
-        console.log("payment check failed" , error);
+export const paymentCheck = async (
+  reservationId: string,
+  userId: string,
+  concertId: string,
+  qty: number,
+  ticketAmount: number,
+  idempotencyKey: string
+) => {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const reservation = await tx.reservation.findUnique({
+        where: {
+          id: reservationId,
+          userId,
+        },
+      });
+      console.log("reservation of payment check", reservation);
+      if (!reservation || reservation.status !== "PAYMENT_PENDING") return;
+      const ticket = await tx.ticket.create({
+        data: {
+          userId,
+          concertId,
+          qty,
+          pricePerTicket: reservation.ticketAmount! / qty,
+          totalPaid: ticketAmount,
+          status: "CONFIRMED",
+          idempotencyKey,
+          confirmedAt: new Date(),
+        },
+      });
+
+      await tx.reservation.update({
+        where: {
+          id: reservationId,
+        },
+        data: {
+          status: "SETTLED",
+          settledAt: new Date(),
+        },
+      });
+      await tx.concert.update({
+        where: {
+          id: concertId,
+        },
+        data: {
+          availableTickets: {
+            decrement: qty,
+          },
+        },
+      });
+      const ticketId = ticket.id;
+      await producer.send({
+        topic: "ticket.issued",
+        messages: [
+          {
+            key: reservationId,
+            value: JSON.stringify({ ticketId , userId , ticket}),
+          },
+        ],
+      });
+    });
+  } catch (error) {
+    console.log("payment check failed", error);
+  }
+};
+
+export const sendTicketToEmail = async( ticket : Ticket )=>{
+  try {
+    const token = await generateTicketQRToken(ticket.id , ticket.userId);
+    const scanURL = `http://localhost:3006/api/v2/ticket/scan?token=${token}`;
+    const qrImage = await QRCode.toDataURL(scanURL);
+    const userEmail = await prisma.user.findUnique({
+      where : {
+        id : ticket.userId,
+      },
+      select : {
+        email : true,
+        name : true,
+        phone : true,
+      }
+    })
+    if(!userEmail) return;
+    const ticketDetails = await prisma.ticket.findUnique({
+      where : {
+        id : ticket.id,
+      },
+      select : {
+        concert : {
+          select : {
+            id : true,
+            name : true,
+            description : true,
+            artist : {
+              select : {
+                name : true,
+              }
+            },
+          }
+        },
+        totalPaid : true,
+        qty : true,
+        status : true,
+      }
+    })
+
+    const { data , error } = await resend.emails.send({
+      from: 'vinod <vinod@skmayya.me>',
+      to: userEmail?.email,
+      subject : "Your Tickets",
+      html : "<strong>it works!</strong>",
+    })
+
+    if(error){
+      throw new Error("Failed to send the tickets to email");
     }
-}   
 
+  } catch (error) {
+    console.log(" failed to send email ");
+  }
+}

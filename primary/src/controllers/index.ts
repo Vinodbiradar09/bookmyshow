@@ -292,7 +292,7 @@ const ticketBooking = async (req: Request, res: Response) => {
         userId: user.id,
         concertId,
         qty,
-        expiresAt : reservation.expiresAt.toISOString(),
+        expiresAt: reservation.expiresAt.toISOString(),
       });
     } catch (kafkaErr) {
       console.error("Kafka produce failed", kafkaErr);
@@ -406,10 +406,10 @@ const ticketPayment = async (req: Request, res: Response) => {
     await paymentSucceeded({
       reservationId,
       userId: user.id,
-      concertId : reservation.concertId!,
-      qty : reservation.qty!,
+      concertId: reservation.concertId!,
+      qty: reservation.qty!,
       ticketAmount: amount,
-      idempotencyKey : reservation.idempotencyKey!
+      idempotencyKey: reservation.idempotencyKey!,
     });
     return res.status(200).json({
       message: "payment received, ticket issuance in progress",
@@ -833,7 +833,7 @@ const delManyConcerts = async (req: Request, res: Response) => {
     .json({ message: "all the concerts are deleted", success: true });
 };
 
-// the below controller is for the future working 
+// the below controller is for the future working
 const updateConcerts = async (req: Request, res: Response) => {
   const body = req.body;
 
@@ -844,25 +844,27 @@ const updateConcerts = async (req: Request, res: Response) => {
     });
   }
 
-  const ids = body.filter(c => c.id).map(c => `'${c.id}'`).join(",");
+  const ids = body
+    .filter((c) => c.id)
+    .map((c) => `'${c.id}'`)
+    .join(",");
   if (!ids.length) {
     return res.status(400).json({ success: false, message: "No valid ids" });
   }
 
   const sqlCase = (column: string, formatter?: (v: any) => string) => {
-    const items = body.filter(c => c[column] !== undefined);
+    const items = body.filter((c) => c[column] !== undefined);
     if (!items.length) return null;
 
     const col = column === "ticketPrice" ? `"ticketPrice"` : `"${column}"`;
 
     const cases = items
-      .map(c => {
-        const raw =
-          formatter
-            ? formatter(c[column])
-            : typeof c[column] === "string"
-            ? `'${c[column]}'`
-            : c[column];
+      .map((c) => {
+        const raw = formatter
+          ? formatter(c[column])
+          : typeof c[column] === "string"
+          ? `'${c[column]}'`
+          : c[column];
 
         return `WHEN '${c.id}' THEN ${raw}`;
       })
@@ -874,9 +876,9 @@ const updateConcerts = async (req: Request, res: Response) => {
   const parts = [
     sqlCase("name"),
     sqlCase("location"),
-    sqlCase("date", v => `'${new Date(v).toISOString()}'`),
-    sqlCase("startTime", v => `'${new Date(v).toISOString()}'`),
-    sqlCase("endTime", v => `'${new Date(v).toISOString()}'`),
+    sqlCase("date", (v) => `'${new Date(v).toISOString()}'`),
+    sqlCase("startTime", (v) => `'${new Date(v).toISOString()}'`),
+    sqlCase("endTime", (v) => `'${new Date(v).toISOString()}'`),
     sqlCase("ticketPrice"),
   ].filter(Boolean);
 
@@ -909,6 +911,14 @@ const updateConcerts = async (req: Request, res: Response) => {
   }
 };
 
+const sendTicketsToEmail = async( req : Request , res : Response)=>{
+  try {
+    
+  } catch (error) {
+    
+  }
+}
+
 export {
   userSignUp,
   userLogin,
@@ -924,4 +934,4 @@ export {
   ticketPayment,
   delManyConcerts,
   updateConcerts,
-}; 
+};
