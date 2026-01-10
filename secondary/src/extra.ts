@@ -84,7 +84,7 @@ export const emailHTML = (
   </p>
 
   <p style="margin:4px 0; font-size:14px;">
-    ⏰ ${showStart} – ${showEnd}
+    ⏰ ${showEnd} – ${showStart}
   </p>
 
   <p style="margin:4px 0; font-size:14px;">
