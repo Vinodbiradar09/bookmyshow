@@ -21,4 +21,4 @@ app.listen(4002, async () => {
   await paymentSucceededConsumer();
   await ticketIssued();
   console.log("consumer server is running at the port 4002");
-});
+}); 
