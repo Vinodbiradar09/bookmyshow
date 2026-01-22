@@ -813,9 +813,9 @@ const delManyConcerts = async (req: Request, res: Response) => {
       .status(411)
       .json({ message: "invalid data structure", success: false });
   const set = new Set(body);
-  const idArr = [...set];
+  const id = [...set];
   const count = await prisma.reservation.count({
-    where: { id: { in: idArr } },
+    where: { id: { in: id } },
   });
   if (count > 0) {
     return res.status(400).json({
@@ -825,7 +825,7 @@ const delManyConcerts = async (req: Request, res: Response) => {
   }
   await prisma.concert.deleteMany({
     where: {
-      id: { in: idArr },
+      id: { in: id },
     },
   });
   return res
@@ -913,7 +913,7 @@ const updateConcerts = async (req: Request, res: Response) => {
 
 const sendTicketsToEmail = async( req : Request , res : Response)=>{
   try {
-    
+   
   } catch (error) {
     
   }
@@ -934,4 +934,5 @@ export {
   ticketPayment,
   delManyConcerts,
   updateConcerts,
+  sendTicketsToEmail,
 };
