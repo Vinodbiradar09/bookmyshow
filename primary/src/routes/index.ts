@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { upload } from "../lib/multer.js";
-import { allArtists, artistDetails, artistLogin, availableTickets, concertDetails, createConcert, currentLoggedUser, delManyConcerts, gatherAllConcertDetails, ticketBooking, ticketPayment, updateConcerts, userLogin, userSignUp } from "../controllers/index.js";
+import { allArtists, artistDetails, artistLogin, availableTickets, concertDetails, createConcert, currentLoggedUser, delManyConcerts, gatherAllConcertDetails, recentConcerts, ticketBooking, ticketPayment, updateConcerts, userLogin, userSignUp } from "../controllers/index.js";
 import { verify } from "../lib/middleware.js";
 const router = Router();
 router.route("/user/signup").post(userSignUp);
@@ -17,4 +17,5 @@ router.route("/user/current").get(verify , currentLoggedUser);
 router.route("/ticket/payment/:reservationId").post(verify , ticketPayment);
 router.route("/delete/concerts").delete(delManyConcerts);
 router.route("/update/concerts").put(updateConcerts);
+router.route("/concerts/recents").get(recentConcerts);
 export {router};

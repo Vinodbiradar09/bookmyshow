@@ -779,6 +779,7 @@ const createConcert = async (req: Request, res: Response) => {
       await Promise.all([
         redis.set(`concert:${concert.id}:stock`, concert.totalTickets),
         redis.del("concerts:all"),
+        redis.del("recent:concerts"),
       ]);
     } catch (redisError) {
       // rollback db
@@ -919,6 +920,61 @@ const sendTicketsToEmail = async( req : Request , res : Response)=>{
   }
 }
 
+const recentConcerts = async(req : Request , res : Response)=>{
+  try {
+    let concerts;
+    concerts = await redis.get("recent:concerts");
+    if(concerts){
+      return res.status(200).json({
+        message : "cache recent concerts",
+        success : true,
+        concerts : JSON.parse(concerts)
+      })
+    }
+    concerts = await prisma.concert.findMany({
+      orderBy : {
+        createdAt : "desc",
+      },
+      select : {
+        id : true,
+        name : true,
+        description : true,
+        location : true,
+        date : true,
+        poster : true,
+        artist : {
+          select : {
+            id : true,
+            name : true,
+          }
+        }
+      },
+      take : 10,
+    })
+
+    if(concerts.length === 0){
+      return res.status(400).json({
+        message : "Zero Recent Concerts",
+        success : true,
+      })
+    }
+
+    await redis.set("recent:concerts" , JSON.stringify(concerts) , "EX" , 1800);
+
+    return res.status(200).json({
+      message : "Recent Concerts",
+      success : true,
+      concerts,
+    })
+  } catch (error) {
+    console.log("error in reading the recent concerts" , error);
+    return res.status(500).json({
+      message : "Internal server error",
+      success : false,
+    })
+  }
+}
+
 export {
   userSignUp,
   userLogin,
@@ -935,4 +991,5 @@ export {
   delManyConcerts,
   updateConcerts,
   sendTicketsToEmail,
+  recentConcerts
 };
