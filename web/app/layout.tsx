@@ -14,7 +14,7 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "BookMyShow Clone",
+  title: "BookMyShow",
   description: "Concert booking platform",
 };
 

@@ -975,6 +975,58 @@ const recentConcerts = async(req : Request , res : Response)=>{
   }
 }
 
+const promotedConcerts = async(req : Request , res : Response)=>{
+  try {
+    let concerts;
+    concerts = await redis.get("promoted:concerts");
+    if(concerts){
+      return res.status(200).json({
+        message : "successfully read the promoted concerts",
+        success : true,
+        concerts : JSON.parse(concerts),
+      })
+    }
+    concerts = await prisma.concert.findMany({
+      where : {
+        promoted : true,
+      },
+       select : {
+        id : true,
+        name : true,
+        description : true,
+        location : true,
+        date : true,
+        poster : true,
+        artist : {
+          select : {
+            id : true,
+            name : true,
+          }
+        }
+      },
+    })
+    if(concerts.length === 0){
+      return res.status(204).json({
+        message : "there are no promoted concerts",
+        success : true,
+      })
+    }
+    await redis.set("promoted:concerts" , JSON.stringify(concerts));
+    return res.status(200).json({
+      message : "Recent Concerts",
+      success : true,
+      concerts,
+    })
+  } catch (error) {
+    console.log("error in reading the recent concerts" , error);
+    return res.status(500).json({
+      message : "Internal server error",
+      success : false,
+    })
+  }
+}
+
+
 export {
   userSignUp,
   userLogin,
@@ -991,5 +1043,6 @@ export {
   delManyConcerts,
   updateConcerts,
   sendTicketsToEmail,
-  recentConcerts
+  recentConcerts,
+  promotedConcerts,
 };
