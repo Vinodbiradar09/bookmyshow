@@ -478,6 +478,17 @@ const availableTickets = async (req: Request, res: Response) => {
         id: true,
         totalTickets: true,
         availableTickets: true,
+        name : true,
+        location : true,
+        date : true,
+        startTime : true,
+        endTime : true,
+        ticketPrice : true,
+        artist : {
+          select : {
+            name : true,
+          }
+        }
       },
     });
     if (!concert) {
