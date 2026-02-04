@@ -514,14 +514,15 @@ const concertDetails = async (req: Request, res: Response) => {
         success: false,
       });
     }
-    const cache = await redis.get(`concert:${concertId}:det`);
-    if (cache) {
-      return res.status(200).json({
-        message: "successfully got the concert details",
-        success: true,
-        concert: JSON.parse(cache),
-      });
-    }
+    // const cache = await redis.get(`concert:${concertId}:det`);
+    // if (cache) {
+    //   console.log("cache hit" , cache);
+    //   return res.status(200).json({
+    //     message: "successfully got the concert details",
+    //     success: true,
+    //     concert: JSON.parse(cache),
+    //   });
+    // }
     const concert = await prisma.concert.findUnique({
       where: {
         id: concertId,
