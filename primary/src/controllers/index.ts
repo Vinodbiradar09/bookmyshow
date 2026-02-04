@@ -98,7 +98,7 @@ const userLogin = async (req: Request, res: Response) => {
       });
     }
     const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
-      user.id
+      user.id,
     );
     res
       .status(200)
@@ -109,6 +109,31 @@ const userLogin = async (req: Request, res: Response) => {
     console.log("internal server error while logging", error);
     return res.status(500).json({
       message: "internal server error while logging",
+      success: false,
+    });
+  }
+};
+
+const me = async (req: Request, res: Response) => {
+  try {
+    const user = req.user;
+    const sanitizedUser = {
+      id: user?.id,
+      email: user?.email,
+      name: user?.name,
+      createdAt: user?.createdAt,
+    };
+    return res
+      .status(200)
+      .json({
+        message: "current logged user accessed",
+        success: true,
+        user: sanitizedUser,
+      });
+  } catch (error) {
+    console.log("failed to access the current logged user", error);
+    return res.status(500).json({
+      message: "failed to access the current logged user",
       success: false,
     });
   }
@@ -225,7 +250,7 @@ const ticketBooking = async (req: Request, res: Response) => {
       }
       await redis.set(
         `concert:${validConcert.id}:det`,
-        JSON.stringify(validConcert)
+        JSON.stringify(validConcert),
       );
     } else {
       validConcert = JSON.parse(cacheConcert);
@@ -247,7 +272,7 @@ const ticketBooking = async (req: Request, res: Response) => {
       reservationId,
       user.id,
       concertId,
-      ttl
+      ttl,
     );
     // if (result) {
     //   console.log("the result is " , result);
@@ -280,7 +305,7 @@ const ticketBooking = async (req: Request, res: Response) => {
         2,
         stockKey,
         reservationKey,
-        qty
+        qty,
       );
       return res
         .status(500)
@@ -535,7 +560,7 @@ const concertDetails = async (req: Request, res: Response) => {
       `concert:${concertId}:det`,
       JSON.stringify(concert),
       "EX",
-      1800
+      1800,
     );
     return res.status(200).json({
       message: "successfully got the concert details",
@@ -750,7 +775,7 @@ const createConcert = async (req: Request, res: Response) => {
 
     const posterUpload = await uploadOnCloudinaryBuffer(
       file.buffer,
-      file.mimetype
+      file.mimetype,
     );
     if (!posterUpload) {
       return res.status(400).json({
@@ -864,8 +889,8 @@ const updateConcerts = async (req: Request, res: Response) => {
         const raw = formatter
           ? formatter(c[column])
           : typeof c[column] === "string"
-          ? `'${c[column]}'`
-          : c[column];
+            ? `'${c[column]}'`
+            : c[column];
 
         return `WHEN '${c.id}' THEN ${raw}`;
       })
@@ -912,120 +937,224 @@ const updateConcerts = async (req: Request, res: Response) => {
   }
 };
 
-const sendTicketsToEmail = async( req : Request , res : Response)=>{
+const sendTicketsToEmail = async (req: Request, res: Response) => {
   try {
-   
-  } catch (error) {
-    
-  }
-}
+  } catch (error) {}
+};
 
-const recentConcerts = async(req : Request , res : Response)=>{
+const recentConcerts = async (req: Request, res: Response) => {
   try {
     let concerts;
     concerts = await redis.get("recent:concerts");
-    if(concerts){
+    if (concerts) {
       return res.status(200).json({
-        message : "cache recent concerts",
-        success : true,
-        concerts : JSON.parse(concerts)
-      })
+        message: "cache recent concerts",
+        success: true,
+        concerts: JSON.parse(concerts),
+      });
     }
     concerts = await prisma.concert.findMany({
-      orderBy : {
-        createdAt : "desc",
+      orderBy: {
+        createdAt: "desc",
       },
-      select : {
-        id : true,
-        name : true,
-        description : true,
-        location : true,
-        date : true,
-        poster : true,
-        artist : {
-          select : {
-            id : true,
-            name : true,
-          }
-        }
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        location: true,
+        date: true,
+        poster: true,
+        artist: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
-      take : 10,
-    })
+      take: 10,
+    });
 
-    if(concerts.length === 0){
+    if (concerts.length === 0) {
       return res.status(400).json({
-        message : "Zero Recent Concerts",
-        success : true,
-      })
+        message: "Zero Recent Concerts",
+        success: true,
+      });
     }
 
-    await redis.set("recent:concerts" , JSON.stringify(concerts) , "EX" , 1800);
+    await redis.set("recent:concerts", JSON.stringify(concerts), "EX", 1800);
 
     return res.status(200).json({
-      message : "Recent Concerts",
-      success : true,
+      message: "Recent Concerts",
+      success: true,
       concerts,
-    })
+    });
   } catch (error) {
-    console.log("error in reading the recent concerts" , error);
+    console.log("error in reading the recent concerts", error);
     return res.status(500).json({
-      message : "Internal server error",
-      success : false,
-    })
+      message: "Internal server error",
+      success: false,
+    });
   }
-}
+};
 
-const promotedConcerts = async(req : Request , res : Response)=>{
+const promotedConcerts = async (req: Request, res: Response) => {
   try {
     let concerts;
     concerts = await redis.get("promoted:concerts");
-    if(concerts){
+    if (concerts) {
       return res.status(200).json({
-        message : "successfully read the promoted concerts",
-        success : true,
-        concerts : JSON.parse(concerts),
-      })
+        message: "successfully read the promoted concerts",
+        success: true,
+        concerts: JSON.parse(concerts),
+      });
     }
     concerts = await prisma.concert.findMany({
-      where : {
-        promoted : true,
+      where: {
+        promoted: true,
       },
-       select : {
-        id : true,
-        name : true,
-        description : true,
-        location : true,
-        date : true,
-        poster : true,
-        artist : {
-          select : {
-            id : true,
-            name : true,
-          }
-        }
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        location: true,
+        date: true,
+        poster: true,
+        artist: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
-    })
-    if(concerts.length === 0){
+    });
+    if (concerts.length === 0) {
       return res.status(204).json({
-        message : "there are no promoted concerts",
-        success : true,
-      })
+        message: "there are no promoted concerts",
+        success: true,
+      });
     }
-    await redis.set("promoted:concerts" , JSON.stringify(concerts));
+    await redis.set("promoted:concerts", JSON.stringify(concerts));
     return res.status(200).json({
-      message : "Recent Concerts",
-      success : true,
+      message: "Recent Concerts",
+      success: true,
       concerts,
-    })
+    });
   } catch (error) {
-    console.log("error in reading the recent concerts" , error);
+    console.log("error in reading the recent concerts", error);
     return res.status(500).json({
-      message : "Internal server error",
-      success : false,
-    })
+      message: "Internal server error",
+      success: false,
+    });
   }
-}
+};
 
+const filterConcerts = async (req: Request, res: Response) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({
+        message: "Unauthorized User",
+        success: false,
+      });
+    }
+    const { date, location, ticketPrice, promoted, search } =
+      req.query as Record<string, string>;
+    const cacheKey = `concerts:filters:${JSON.stringify(req.query)}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return res.status(200).json({
+        message: "cached concerts",
+        success: true,
+        concerts: JSON.parse(cached),
+      });
+    }
+
+    const where: any = {};
+    if (location) {
+      where.location = {
+        contains: location,
+        mode: "insensitive",
+      };
+    }
+    if (promoted !== undefined) {
+      where.promoted = promoted === "true";
+    }
+    if (ticketPrice) {
+      where.ticketPrice = {
+        lte: Number(ticketPrice),
+      };
+    }
+    if (date) {
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      where.date = {
+        gte: start,
+        lte: end,
+      };
+    }
+    if (search) {
+      where.OR = [
+        {
+          name: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+        {
+          artist: {
+            name: {
+              contains: search,
+              mode: "insensitive",
+            },
+          },
+        },
+      ];
+    }
+
+    const concerts = await prisma.concert.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        location: true,
+        date: true,
+        poster: true,
+        ticketPrice: true,
+        promoted: true,
+        artist: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        date: "asc",
+      },
+    });
+    if (concerts.length === 0) {
+      return res.status(404).json({
+        message: "No concerts found",
+        success: false,
+      });
+    }
+    await redis.set(cacheKey, JSON.stringify(concerts), "EX", 1800);
+    return res.status(200).json({
+      message: "concerts",
+      success: true,
+      concerts,
+    });
+  } catch (error) {
+    console.error("error in filtering concerts", error);
+    return res.status(500).json({
+      message: "Internal server error",
+      success: false,
+    });
+  }
+};
 
 export {
   userSignUp,
@@ -1045,4 +1174,6 @@ export {
   sendTicketsToEmail,
   recentConcerts,
   promotedConcerts,
+  filterConcerts,
+  me
 };

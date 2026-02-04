@@ -12,6 +12,7 @@ export interface Concert {
   location: string;
   date: string;
   poster: string;
+  ticketPrice?: number,
   artist: {
     id: string;
     name: string;
