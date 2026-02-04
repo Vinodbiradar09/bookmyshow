@@ -6,8 +6,6 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-/* ---------------- TYPES ---------------- */
-
 export interface Con {
   id: string;
   name: string;
@@ -19,7 +17,7 @@ export interface Con {
   totalTickets: number;
   availableTickets: number;
   ticketPrice: number;
-  poster: string; // ✅ IMPORTANT
+  poster: string;
   artist: {
     id: string;
     name: string;
@@ -29,8 +27,6 @@ export interface Con {
   createdAt: string;
   updatedAt: string;
 }
-
-/* ---------------- HELPERS ---------------- */
 
 const formatDate = (date: string) =>
   new Date(date).toLocaleDateString("en-IN", {
@@ -47,12 +43,10 @@ const formatTime = (iso: string) =>
     hour12: true,
   });
 
-/* ---------------- PAGE ---------------- */
-
 const Concert = ({ params }: { params: Promise<{ id: string }> }) => {
   const { id } = use(params);
   const router = useRouter();
-
+  const [availableTickets, setAvailableTickets] = useState<number>();
   const [concert, setConcert] = useState<Con | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -63,7 +57,7 @@ const Concert = ({ params }: { params: Promise<{ id: string }> }) => {
         setLoading(true);
         const res = await axios.get(
           `http://localhost:3006/api/v2/concert/${id}`,
-          { withCredentials: true }
+          { withCredentials: true },
         );
 
         if (res.data.success) {
@@ -72,13 +66,34 @@ const Concert = ({ params }: { params: Promise<{ id: string }> }) => {
           setError("Failed to load concert");
         }
       } catch (err) {
+        console.log(err);
         setError("Something went wrong");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchConcert();
+    const availableTickets = async () => {
+      try {
+        const response = await axios.get(
+          `http://localhost:3006/api/v2/ticket/available/${id}`,{
+            withCredentials : true
+          },
+        );
+        if (response.data.success && response.status === 200) {
+          setAvailableTickets(response.data.availableTickets);
+        } else {
+          setError(response.data.message);
+        }
+      } catch (error) {
+        console.log(error);
+      }
+    };
+
+    const t = async()=>{
+        await Promise.all([fetchConcert() , availableTickets()]);
+    }
+    t();
   }, [id]);
 
   if (loading) return <p className="p-10">Loading...</p>;
@@ -87,15 +102,12 @@ const Concert = ({ params }: { params: Promise<{ id: string }> }) => {
 
   return (
     <div className="bg-[#f5f5f5] min-h-screen">
-      {/* HEADER */}
       <div className="bg-white px-12 py-6">
         <h1 className="text-2xl font-bold">{concert.name}</h1>
       </div>
 
       <div className="flex gap-8 px-12 py-6">
-        {/* LEFT */}
         <div className="flex-1 space-y-6">
-          {/* ✅ POSTER (FIXED) */}
           <div className="relative h-[420px] rounded-lg overflow-hidden bg-black">
             <Image
               src={concert.poster}
@@ -107,7 +119,6 @@ const Concert = ({ params }: { params: Promise<{ id: string }> }) => {
             />
           </div>
 
-          {/* Tags */}
           <div className="flex gap-2">
             <span className="bg-gray-200 px-3 py-1 rounded text-xs">
               Concerts
@@ -117,7 +128,6 @@ const Concert = ({ params }: { params: Promise<{ id: string }> }) => {
             </span>
           </div>
 
-          {/* About */}
           <div className="bg-white rounded-lg p-6">
             <h2 className="text-lg font-semibold mb-2">About the Event</h2>
             <p className="text-sm text-gray-700 leading-relaxed">
@@ -125,7 +135,6 @@ const Concert = ({ params }: { params: Promise<{ id: string }> }) => {
             </p>
           </div>
 
-          {/* ✅ ARTIST SECTION */}
           <div className="bg-white rounded-lg p-6">
             <h2 className="text-lg font-semibold mb-4">Artist</h2>
             <div className="flex gap-4">
@@ -138,15 +147,12 @@ const Concert = ({ params }: { params: Promise<{ id: string }> }) => {
               />
               <div>
                 <p className="font-medium">{concert.artist.name}</p>
-                <p className="text-sm text-gray-600">
-                  {concert.artist.bio}
-                </p>
+                <p className="text-sm text-gray-600">{concert.artist.bio}</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* RIGHT — BOOKING CARD (UNCHANGED UI) */}
         <div className="w-[360px]">
           <div className="bg-white rounded-lg p-6 space-y-4 sticky top-6">
             <div className="space-y-2 text-sm">
@@ -165,7 +171,7 @@ const Concert = ({ params }: { params: Promise<{ id: string }> }) => {
               </p>
               <p className="text-xs text-orange-600">Filling fast</p>
             </div>
-
+            <p>Tickets Available:{availableTickets}</p>
             <Button
               className="w-full bg-red-600 hover:bg-red-700"
               onClick={() => router.push(`/book/${concert.id}`)}
