@@ -123,13 +123,11 @@ const me = async (req: Request, res: Response) => {
       name: user?.name,
       createdAt: user?.createdAt,
     };
-    return res
-      .status(200)
-      .json({
-        message: "current logged user accessed",
-        success: true,
-        user: sanitizedUser,
-      });
+    return res.status(200).json({
+      message: "current logged user accessed",
+      success: true,
+      user: sanitizedUser,
+    });
   } catch (error) {
     console.log("failed to access the current logged user", error);
     return res.status(500).json({
@@ -1048,65 +1046,58 @@ const promotedConcerts = async (req: Request, res: Response) => {
   }
 };
 
-const filterConcerts = async (req: Request, res: Response) => {
+const getConcerts = async (req: Request, res: Response) => {
   try {
-    const user = req.user;
-    if (!user) {
-      return res.status(401).json({
-        message: "Unauthorized User",
-        success: false,
-      });
-    }
-    const { date, location, ticketPrice, promoted, search } =
+    const { search, location, promoted, date, priceMin, priceMax } =
       req.query as Record<string, string>;
-    const cacheKey = `concerts:filters:${JSON.stringify(req.query)}`;
+
+    const cacheKey = `concerts:${JSON.stringify(req.query)}`;
     const cached = await redis.get(cacheKey);
+
     if (cached) {
-      return res.status(200).json({
-        message: "cached concerts",
-        success: true,
-        concerts: JSON.parse(cached),
-      });
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) {
+        return res.status(200).json({ success: true, concerts: parsed });
+      }
     }
 
     const where: any = {};
+
     if (location) {
-      where.location = {
-        contains: location,
-        mode: "insensitive",
-      };
+      where.location = { contains: location, mode: "insensitive" };
     }
-    if (promoted !== undefined) {
-      where.promoted = promoted === "true";
+
+    if (promoted === "true") {
+      where.promoted = { equals: true };
     }
-    if (ticketPrice) {
+
+    if (priceMin || priceMax) {
       where.ticketPrice = {
-        lte: Number(ticketPrice),
+        not: null,
+        ...(priceMin && { gte: Number(priceMin) }),
+        ...(priceMax && { lte: Number(priceMax) }),
       };
     }
+
     if (date) {
       const start = new Date(date);
       start.setHours(0, 0, 0, 0);
+
       const end = new Date(date);
       end.setHours(23, 59, 59, 999);
-      where.date = {
-        gte: start,
-        lte: end,
-      };
+
+      where.date = { gte: start, lte: end };
     }
+
     if (search) {
       where.OR = [
         {
-          name: {
-            contains: search,
-            mode: "insensitive",
-          },
+          name: { contains: search, mode: "insensitive" },
         },
         {
           artist: {
-            name: {
-              contains: search,
-              mode: "insensitive",
+            is: {
+              name: { contains: search, mode: "insensitive" },
             },
           },
         },
@@ -1115,46 +1106,67 @@ const filterConcerts = async (req: Request, res: Response) => {
 
     const concerts = await prisma.concert.findMany({
       where,
+      orderBy: [{ promoted: "desc" }, { date: "asc" }],
       select: {
         id: true,
         name: true,
-        description: true,
         location: true,
         date: true,
         poster: true,
         ticketPrice: true,
         promoted: true,
-        artist: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-      orderBy: {
-        date: "asc",
+        artist: { select: { name: true } },
       },
     });
-    if (concerts.length === 0) {
-      return res.status(404).json({
-        message: "No concerts found",
-        success: false,
-      });
-    }
-    await redis.set(cacheKey, JSON.stringify(concerts), "EX", 1800);
-    return res.status(200).json({
-      message: "concerts",
-      success: true,
-      concerts,
-    });
+
+    await redis.set(cacheKey, JSON.stringify(concerts), "EX", 900);
+
+    return res.status(200).json({ success: true, concerts });
   } catch (error) {
-    console.error("error in filtering concerts", error);
+    console.error("GET CONCERTS ERROR", error);
     return res.status(500).json({
-      message: "Internal server error",
       success: false,
+      message: "Internal server error",
     });
   }
 };
+
+
+// const getConcertFiltersMeta = async (req: Request, res: Response) => {
+//   try {
+//     const [locations, prices, promotedCount] = await Promise.all([
+//       prisma.concert.groupBy({
+//         by: ["location"],
+//         _count: { location: true },
+//         where: { location: { not: null } },
+//       }),
+//       prisma.concert.groupBy({
+//         by: ["ticketPrice"],
+//         _count: { ticketPrice: true },
+//         where: { ticketPrice: { not: null } },
+//         orderBy: { ticketPrice: "asc" },
+//       }),
+//       prisma.concert.count({
+//         where: { promoted: true },
+//       }),
+//     ]);
+//     return res.status(200).json({
+//       success: true,
+//       message: "successfully got the counts",
+//       filters: {
+//         locations,
+//         prices,
+//         promotedCount,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("FILTER META ERROR", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to load filter metadata",
+//     });
+//   }
+// };
 
 export {
   userSignUp,
@@ -1174,6 +1186,7 @@ export {
   sendTicketsToEmail,
   recentConcerts,
   promotedConcerts,
-  filterConcerts,
-  me
+  getConcerts,
+  me,
+  // getConcertFiltersMeta,
 };
