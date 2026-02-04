@@ -1048,8 +1048,14 @@ const promotedConcerts = async (req: Request, res: Response) => {
 
 const getConcerts = async (req: Request, res: Response) => {
   try {
-    const { search, location, promoted, date, priceMin, priceMax } =
-      req.query as Record<string, string>;
+    const {
+      search,
+      location,
+      promoted,
+      date,
+      priceMin,
+      priceMax,
+    } = req.query as Record<string, string>;
 
     const cacheKey = `concerts:${JSON.stringify(req.query)}`;
     const cached = await redis.get(cacheKey);
@@ -1057,25 +1063,32 @@ const getConcerts = async (req: Request, res: Response) => {
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
-        return res.status(200).json({ success: true, concerts: parsed });
+        return res.status(200).json({
+          success: true,
+          concerts: parsed,
+          cached: true,
+        });
       }
     }
 
     const where: any = {};
-
     if (location) {
-      where.location = { contains: location, mode: "insensitive" };
+      where.location = {
+        contains: location,
+        mode: "insensitive",
+      };
     }
-
     if (promoted === "true") {
-      where.promoted = { equals: true };
+      where.promoted = true;
     }
+    const hasPriceMin = priceMin !== undefined;
+    const hasPriceMax = priceMax !== undefined;
 
-    if (priceMin || priceMax) {
+    if (hasPriceMin || hasPriceMax) {
       where.ticketPrice = {
         not: null,
-        ...(priceMin && { gte: Number(priceMin) }),
-        ...(priceMax && { lte: Number(priceMax) }),
+        ...(hasPriceMin && { gte: Number(priceMin) }),
+        ...(hasPriceMax && { lte: Number(priceMax) }),
       };
     }
 
@@ -1086,18 +1099,26 @@ const getConcerts = async (req: Request, res: Response) => {
       const end = new Date(date);
       end.setHours(23, 59, 59, 999);
 
-      where.date = { gte: start, lte: end };
+      where.date = {
+        gte: start,
+        lte: end,
+      };
     }
-
     if (search) {
       where.OR = [
         {
-          name: { contains: search, mode: "insensitive" },
+          name: {
+            contains: search,
+            mode: "insensitive",
+          },
         },
         {
           artist: {
             is: {
-              name: { contains: search, mode: "insensitive" },
+              name: {
+                contains: search,
+                mode: "insensitive",
+              },
             },
           },
         },
@@ -1106,7 +1127,10 @@ const getConcerts = async (req: Request, res: Response) => {
 
     const concerts = await prisma.concert.findMany({
       where,
-      orderBy: [{ promoted: "desc" }, { date: "asc" }],
+      orderBy: [
+        { promoted: "desc" },
+        { date: "asc" },
+      ],
       select: {
         id: true,
         name: true,
@@ -1115,13 +1139,20 @@ const getConcerts = async (req: Request, res: Response) => {
         poster: true,
         ticketPrice: true,
         promoted: true,
-        artist: { select: { name: true } },
+        artist: {
+          select: {
+            name: true,
+          },
+        },
       },
     });
 
     await redis.set(cacheKey, JSON.stringify(concerts), "EX", 900);
 
-    return res.status(200).json({ success: true, concerts });
+    return res.status(200).json({
+      success: true,
+      concerts,
+    });
   } catch (error) {
     console.error("GET CONCERTS ERROR", error);
     return res.status(500).json({

@@ -7,7 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 
 type Concert = {
@@ -16,74 +20,95 @@ type Concert = {
   location: string;
   date: string;
   poster: string;
-  ticketPrice: number;
-  promoted: boolean;
+  ticketPrice: number | null;
+  promoted: boolean | null;
   artist: { name: string };
 };
+
+
+function useDebounce<T>(value: T, delay = 400) {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebounced(value);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debounced;
+}
 
 export default function ConcertsPage() {
   const [concerts, setConcerts] = useState<Concert[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const [filters, setFilters] = useState<any>({
+  const [filters, setFilters] = useState({
     search: "",
     location: "",
     promoted: false,
-    price: [0, 5000],
-    date: undefined,
+    price: [0, 5000] as [number, number],
+    date: undefined as Date | undefined,
   });
+
+  const debouncedFilters = useDebounce(filters);
 
   useEffect(() => {
     const fetchConcerts = async () => {
-      setLoading(true);
+      try {
+        setLoading(true);
 
-      const params: any = {
-        search: filters.search || undefined,
-        location: filters.location || undefined,
-        promoted: filters.promoted || undefined,
-        priceMin: filters.price[0],
-        priceMax: filters.price[1],
-        date: filters.date
-          ? filters.date.toISOString().split("T")[0]
-          : undefined,
-      };
+        const params = {
+          search: debouncedFilters.search || undefined,
+          location: debouncedFilters.location || undefined,
+          promoted: debouncedFilters.promoted ? "true" : undefined,
+          priceMin: debouncedFilters.price[0],
+          priceMax: debouncedFilters.price[1],
+          date: debouncedFilters.date
+            ? debouncedFilters.date.toISOString().split("T")[0]
+            : undefined,
+        };
 
-      const res = await axios.get(
-        "http://localhost:3006/api/v2/concerts",
-        { params , withCredentials : true }
-      );
-      setConcerts(res.data.concerts);
-      setLoading(false);
+        const res = await axios.get(
+          "http://localhost:3006/api/v2/concerts",
+          { params, withCredentials: true }
+        );
+
+        const data = res.data?.concerts;
+        setConcerts(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("FETCH CONCERTS ERROR", err);
+        setConcerts([]);
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchConcerts();
-  }, [filters]);
+  }, [debouncedFilters]);
 
   return (
     <div className="flex gap-10 p-8">
-      {/* SIDEBAR */}
       <aside className="w-72 space-y-6">
         <h2 className="text-lg font-semibold">Filters</h2>
 
-        {/* SEARCH */}
         <Input
           placeholder="Search artist or concert"
           value={filters.search}
           onChange={(e) =>
-            setFilters((f: any) => ({ ...f, search: e.target.value }))
+            setFilters((f) => ({ ...f, search: e.target.value }))
           }
         />
 
-        {/* LOCATION */}
         <Input
           placeholder="Location"
           value={filters.location}
           onChange={(e) =>
-            setFilters((f: any) => ({ ...f, location: e.target.value }))
+            setFilters((f) => ({ ...f, location: e.target.value }))
           }
         />
 
-        {/* DATE */}
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline">Select Date</Button>
@@ -92,14 +117,13 @@ export default function ConcertsPage() {
             <Calendar
               mode="single"
               selected={filters.date}
-              onSelect={(date : any) =>
-                setFilters((f: any) => ({ ...f, date }))
+              onSelect={(date) =>
+                setFilters((f) => ({ ...f, date }))
               }
             />
           </PopoverContent>
         </Popover>
 
-        {/* PRICE */}
         <div>
           <p className="text-sm font-medium mb-2">Price Range</p>
           <Slider
@@ -107,8 +131,8 @@ export default function ConcertsPage() {
             max={5000}
             step={100}
             value={filters.price}
-            onValueChange={(val : any) =>
-              setFilters((f: any) => ({ ...f, price: val }))
+            onValueChange={(val) =>
+              setFilters((f) => ({ ...f, price: val as [number, number] }))
             }
           />
           <p className="text-xs mt-1">
@@ -116,43 +140,47 @@ export default function ConcertsPage() {
           </p>
         </div>
 
-        {/* PROMOTED */}
         <div className="flex items-center gap-2">
           <Checkbox
             checked={filters.promoted}
-            onCheckedChange={(val : any) =>
-              setFilters((f: any) => ({ ...f, promoted: Boolean(val) }))
+            onCheckedChange={(val) =>
+              setFilters((f) => ({ ...f, promoted: Boolean(val) }))
             }
           />
           <span>Promoted</span>
         </div>
       </aside>
-
-      {/* GRID */}
       <main className="grid grid-cols-4 gap-6 flex-1">
         {loading && <p>Loading...</p>}
 
-        {concerts?.map((c) => {
-          const d = new Date(c.date);
-          return (
-            <div key={c.id} className="rounded-xl overflow-hidden shadow">
-              <div className="relative h-72">
-                <Image src={c.poster} alt={c.name} fill className="object-cover" />
-                {c.promoted && (
-                  <span className="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
-                    PROMOTED
-                  </span>
-                )}
-              </div>
-              <div className="p-4">
-                <p className="font-semibold">{c.name}</p>
-                <p className="text-sm text-gray-600">{c.artist.name}</p>
-                <p className="text-sm text-gray-500">{c.location}</p>
-                <p className="text-sm mt-1">₹{c.ticketPrice} onwards</p>
-              </div>
+        {concerts.map((c) => (
+          <div key={c.id} className="rounded-xl overflow-hidden shadow">
+            <div className="relative h-72">
+              <Image
+                src={c.poster}
+                alt={c.name}
+                fill
+                className="object-cover"
+              />
+              {c.promoted === true && (
+                <span className="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
+                  PROMOTED
+                </span>
+              )}
             </div>
-          );
-        })}
+
+            <div className="p-4">
+              <p className="font-semibold">{c.name}</p>
+              <p className="text-sm text-gray-600">{c.artist.name}</p>
+              <p className="text-sm text-gray-500">{c.location}</p>
+              {c.ticketPrice !== null && (
+                <p className="text-sm mt-1">
+                  ₹{c.ticketPrice} onwards
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
       </main>
     </div>
   );
