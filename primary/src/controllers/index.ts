@@ -10,6 +10,20 @@ import { v4 as uuidv4 } from "uuid";
 import { paymentSucceeded, reservationCreated } from "../kafka/producer.js";
 import { Prisma } from "@prisma/client";
 
+async function deleteByPattern(pattern : string) {
+  const stream = redis.scanStream({
+    match : pattern,
+    count : 100,
+  });
+
+  stream.on("data" , async(keys)=>{
+    if(keys.length > 0){
+      await redis.del(keys);
+    }
+  });
+  return new Promise((resolve)=> stream.on("close" , resolve));
+}
+
 const userSignUp = async (req: Request, res: Response) => {
   try {
     const body: User = req.body;
@@ -295,6 +309,7 @@ const ticketBooking = async (req: Request, res: Response) => {
           expiresAt: new Date(Date.now() + ttl * 1000),
           idempotencyKey,
         },
+
       });
     } catch (dbErr) {
       console.error("DB reservation creation failed", dbErr);
@@ -328,6 +343,12 @@ const ticketBooking = async (req: Request, res: Response) => {
       success: true,
       message: "Tickets reserved successfully",
       reservation,
+      user : {
+        id : user.id,
+        email : user.email,
+        name : user.name,
+        phone : user.phone,
+      }
     });
   } catch (error: any) {
     console.log("Internal server error", error?.message);
@@ -816,6 +837,7 @@ const createConcert = async (req: Request, res: Response) => {
         redis.set(`concert:${concert.id}:stock`, concert.totalTickets),
         redis.del("concerts:all"),
         redis.del("recent:concerts"),
+        await deleteByPattern("concerts:filter"),
       ]);
     } catch (redisError) {
       // rollback db
@@ -1070,10 +1092,11 @@ const getConcerts = async (req: Request, res: Response) => {
       priceMax,
     } = req.query as Record<string, string>;
 
-    const cacheKey = `concerts:${JSON.stringify(req.query)}`;
+    const cacheKey = `concerts:filter:${JSON.stringify(req.query)}`;
     const cached = await redis.get(cacheKey);
 
     if (cached) {
+      console.log("hey reading from cache");
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
         return res.status(200).json({
