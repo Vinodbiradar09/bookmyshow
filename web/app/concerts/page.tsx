@@ -147,7 +147,7 @@ export default function ConcertsPage() {
             }
           />
           <p className="text-xs mt-1">
-            ₹{filters.price[0]} – ₹{filters.price[1]}
+
           </p>
         </div>
 

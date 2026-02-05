@@ -76,8 +76,9 @@ const Concert = ({ params }: { params: Promise<{ id: string }> }) => {
     const availableTickets = async () => {
       try {
         const response = await axios.get(
-          `http://localhost:3006/api/v2/ticket/available/${id}`,{
-            withCredentials : true
+          `http://localhost:3006/api/v2/ticket/available/${id}`,
+          {
+            withCredentials: true,
           },
         );
         if (response.data.success && response.status === 200) {
@@ -90,9 +91,9 @@ const Concert = ({ params }: { params: Promise<{ id: string }> }) => {
       }
     };
 
-    const t = async()=>{
-        await Promise.all([fetchConcert() , availableTickets()]);
-    }
+    const t = async () => {
+      await Promise.all([fetchConcert(), availableTickets()]);
+    };
     t();
   }, [id]);
 
@@ -108,7 +109,7 @@ const Concert = ({ params }: { params: Promise<{ id: string }> }) => {
 
       <div className="flex gap-8 px-12 py-6">
         <div className="flex-1 space-y-6">
-          <div className="relative h-[420px] rounded-lg overflow-hidden bg-black">
+          <div className="relative h-105 rounded-lg overflow-hidden bg-black">
             <Image
               src={concert.poster}
               alt={concert.name}
@@ -135,20 +136,21 @@ const Concert = ({ params }: { params: Promise<{ id: string }> }) => {
             </p>
           </div>
 
-          <div className="bg-white rounded-lg p-6">
-            <h2 className="text-lg font-semibold mb-4">Artist</h2>
-            <div className="flex gap-4">
+          <div className="flex gap-4 items-start">
+            <div className="relative w-20 h-20 shrink-0">
               <Image
                 src={concert.artist.image}
                 alt={concert.artist.name}
-                width={80}
-                height={80}
+                fill
+                sizes="80px"
                 className="rounded-full object-cover"
+                priority
               />
-              <div>
-                <p className="font-medium">{concert.artist.name}</p>
-                <p className="text-sm text-gray-600">{concert.artist.bio}</p>
-              </div>
+            </div>
+
+            <div>
+              <p className="font-medium">{concert.artist.name}</p>
+              <p className="text-sm text-gray-600">{concert.artist.bio}</p>
             </div>
           </div>
         </div>
@@ -174,7 +176,7 @@ const Concert = ({ params }: { params: Promise<{ id: string }> }) => {
             <p>Tickets Available:{availableTickets}</p>
             <Button
               className="w-full bg-red-600 hover:bg-red-700"
-              onClick={() => router.push(`/book/${concert.id}`)}
+              onClick={() => router.push(`/booking/${concert.id}`)}
             >
               Book Now
             </Button>

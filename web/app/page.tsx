@@ -12,7 +12,7 @@ export interface Concert {
   location: string;
   date: string;
   poster: string;
-  ticketPrice?: number,
+  ticketPrice?: number;
   artist: {
     id: string;
     name: string;
@@ -38,7 +38,7 @@ export default function Home() {
         setError(null);
 
         const res = await axios.get(
-          "http://localhost:3006/api/v2/concerts/recents"
+          "http://localhost:3006/api/v2/concerts/recents",
         );
 
         if (res.data?.success && res.status === 200) {
@@ -88,6 +88,7 @@ export default function Home() {
               fill
               className="object-contain mix-blend-multiply"
               priority
+              sizes="120px"
             />
           </div>
 
@@ -97,8 +98,8 @@ export default function Home() {
         </div>
 
         <p className="mt-5 text-lg text-gray-600 max-w-2xl">
-          Book your favorite concerts, live shows and experiences —
-          seamlessly and instantly.
+          Book your favorite concerts, live shows and experiences — seamlessly
+          and instantly.
         </p>
 
         <p className="mt-1 text-sm text-gray-400 tracking-widest uppercase">
@@ -115,9 +116,7 @@ export default function Home() {
 
       <div className="w-full max-w-7xl px-6 mt-24 pb-28">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-2xl font-semibold">
-            Recommended Concerts
-          </h2>
+          <h2 className="text-2xl font-semibold">Recommended Concerts</h2>
 
           <button
             onClick={() => router.push("/concerts")}
@@ -127,13 +126,9 @@ export default function Home() {
           </button>
         </div>
 
-        {loading && (
-          <div className="text-gray-500">Loading concerts...</div>
-        )}
+        {loading && <div className="text-gray-500">Loading concerts...</div>}
 
-        {error && (
-          <div className="text-red-500">{error}</div>
-        )}
+        {error && <div className="text-red-500">{error}</div>}
 
         {!loading && !error && (
           <div className="relative">
@@ -155,9 +150,11 @@ export default function Home() {
               ref={sliderRef}
               className="flex gap-8 overflow-x-hidden scroll-smooth"
             >
-              {concerts.slice(0, 10).map((concert) => {
+              {concerts.slice(0, 10).map((concert, index) => {
                 const date = new Date(concert.date);
-                const dayName = date.toLocaleDateString("en-US", { weekday: "short" });
+                const dayName = date.toLocaleDateString("en-US", {
+                  weekday: "short",
+                });
                 const day = date.getDate();
                 const month = date.toLocaleDateString("en-US", {
                   month: "short",
@@ -177,6 +174,8 @@ export default function Home() {
                         src={concert.poster}
                         alt={concert.name}
                         fill
+                        sizes="(max-width: 768px) 100vw, 320px"
+                        loading={index === 0 ? "eager" : "lazy"}
                         className="object-cover"
                       />
                     </div>
