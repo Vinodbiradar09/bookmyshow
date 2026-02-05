@@ -222,58 +222,80 @@ const ticketBooking = async (req: Request, res: Response) => {
   try {
     const user = req.user;
     if (!user) {
-      return res
-        .status(401)
-        .json({ message: "Unauthorized user", success: false });
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized user",
+      });
     }
 
     const { concertId } = req.params;
     const { qty, idempotencyKey } = req.body;
 
     if (!concertId) {
-      return res
-        .status(400)
-        .json({ message: "Concert ID is required", success: false });
+      return res.status(400).json({
+        success: false,
+        message: "Concert ID is required",
+      });
     }
 
     if (!qty || qty < 1 || qty > 10) {
-      return res
-        .status(400)
-        .json({ message: "Invalid ticket count", success: false });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid ticket quantity",
+      });
     }
 
     if (!idempotencyKey) {
-      return res
-        .status(400)
-        .json({ message: "Idempotency key is required", success: false });
-    }
-
-    let cacheConcert: any = await redis.get(`concert:${concertId}:det`);
-    let validConcert;
-    if (!cacheConcert) {
-      console.log("cache miss");
-      validConcert = await prisma.concert.findUnique({
-        where: { id: concertId },
+      return res.status(400).json({
+        success: false,
+        message: "Idempotency key required",
       });
-      if (!validConcert) {
-        return res
-          .status(404)
-          .json({ message: "Concert not found", success: false });
-      }
-      await redis.set(
-        `concert:${validConcert.id}:det`,
-        JSON.stringify(validConcert),
-      );
-    } else {
-      validConcert = JSON.parse(cacheConcert);
     }
 
+    /* ------------------------------------------------
+       🔐 REDIS CLUSTER HASH TAG (CRITICAL)
+    ------------------------------------------------ */
+    const hashTag = `{concert:${concertId}}`;
+
+    const stockKey = `${hashTag}:stock`;
     const reservationId = uuidv4();
+    const reservationKey = `${hashTag}:reservation:${reservationId}`;
+    const idemKey = `${hashTag}:idempotency:${idempotencyKey}`;
+
+    /* ------------------------------------------------
+       📦 LAZY STOCK INIT
+    ------------------------------------------------ */
+    let cachedConcert = await redis.get(stockKey);
+
+    if (!cachedConcert) {
+      const concertFromDb = await prisma.concert.findUnique({
+        where: { id: concertId },
+        select: {
+          id: true,
+          totalTickets: true,
+          availableTickets: true,
+          ticketPrice: true,
+        },
+      });
+
+      if (!concertFromDb) {
+        return res.status(404).json({
+          success: false,
+          message: "Concert not found",
+        });
+      }
+
+      await redis.set(stockKey, JSON.stringify(concertFromDb));
+      cachedConcert = JSON.stringify(concertFromDb);
+    }
+
+    const concert = JSON.parse(cachedConcert);
+
     const ttl = 300;
-    const totalTicketAmount = validConcert?.ticketPrice! * qty;
-    const stockKey = `concert:${concertId}:stock`;
-    const reservationKey = `reservation:${reservationId}`;
-    const idemKey = `idempotency:${idempotencyKey}`;
+
+    /* ------------------------------------------------
+       ⚡ ATOMIC RESERVATION (LUA)
+    ------------------------------------------------ */
     const result = await redis.eval(
       luaScripts.reserveTickets,
       3,
@@ -284,19 +306,20 @@ const ticketBooking = async (req: Request, res: Response) => {
       reservationId,
       user.id,
       concertId,
-      ttl,
+      ttl
     );
-    // if (result) {
-    //   console.log("the result is " , result);
-    //   return res.status(409).json({ message: result, success: false });
-    // }
 
     const [status, resId] = result as any;
+
     if (status !== "RESERVED" && status !== "IDEMPOTENT") {
-      return res
-        .status(409)
-        .json({ message: "Unable to reserve tickets", success: false });
+      return res.status(409).json({
+        success: false,
+        message: "Unable to reserve tickets",
+      });
     }
+
+    const totalTicketAmount = concert.ticketPrice * qty;
+
     let reservation;
     try {
       reservation = await prisma.reservation.create({
@@ -309,21 +332,22 @@ const ticketBooking = async (req: Request, res: Response) => {
           expiresAt: new Date(Date.now() + ttl * 1000),
           idempotencyKey,
         },
-
       });
-    } catch (dbErr) {
-      console.error("DB reservation creation failed", dbErr);
+    } catch (err) {
       await redis.eval(
         luaScripts.releaseTickets,
         2,
         stockKey,
         reservationKey,
-        qty,
+        qty
       );
-      return res
-        .status(500)
-        .json({ message: "Reservation failed", success: false });
+
+      return res.status(500).json({
+        success: false,
+        message: "Reservation failed",
+      });
     }
+
     try {
       await reservationCreated({
         reservationId: reservation.id,
@@ -332,45 +356,46 @@ const ticketBooking = async (req: Request, res: Response) => {
         qty,
         expiresAt: reservation.expiresAt.toISOString(),
       });
-    } catch (kafkaErr) {
-      console.error("Kafka produce failed", kafkaErr);
+    } catch (err) {
+      console.error("Kafka error", err);
     }
 
     return res.status(200).json({
+      success: true,
+      status: "RESERVED",
       reservationId: reservation.id,
       expiresAt: reservation.expiresAt,
-      status: "RESERVED",
-      success: true,
-      message: "Tickets reserved successfully",
       reservation,
-      user : {
-        id : user.id,
-        email : user.email,
-        name : user.name,
-        phone : user.phone,
-      }
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        phone: user.phone,
+      },
     });
   } catch (error: any) {
-    console.log("Internal server error", error?.message);
     if (error?.message === "INSUFFICIENT_STOCK") {
       return res.status(409).json({
-        message: "Not enough tickets available",
         success: false,
+        message: "Not enough tickets available",
       });
     }
 
     if (error?.message === "STOCK_NOT_INITIALIZED") {
       return res.status(500).json({
-        message: "the ticket stock for the concert is not intialized",
         success: false,
+        message: "Ticket stock not initialized",
       });
     }
 
-    return res
-      .status(500)
-      .json({ message: "Internal server error", success: false });
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };
+
+
 
 const ticketPayment = async (req: Request, res: Response) => {
   try {
@@ -832,12 +857,28 @@ const createConcert = async (req: Request, res: Response) => {
         poster: posterUpload.secure_url,
         artistId,
       },
+      select : {
+        id : true,
+        totalTickets : true,
+        availableTickets : true,
+        name : true,
+        location : true,
+        date : true,
+        startTime : true,
+        endTime : true,
+        ticketPrice : true,
+        artist : {
+          select : {
+            name : true,
+          }
+        }
+      }
     });
     try {
-      await Promise.all([
-        redis.set(`concert:${concert.id}:stock`, concert.totalTickets),
-        redis.del("concerts:all"),
-        redis.del("recent:concerts"),
+        await Promise.all([
+        await redis.set(`concert:${concert.id}:stock`, JSON.stringify(concert)),
+        await redis.del("concerts:all"),
+        await redis.del("recent:concerts"),
         await deleteByPattern("concerts:filter"),
       ]);
     } catch (redisError) {

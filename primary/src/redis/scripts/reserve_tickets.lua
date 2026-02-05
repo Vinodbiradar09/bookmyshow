@@ -1,5 +1,5 @@
 -- KEYS
--- 1 -> concert stock key
+-- 1 -> stock key (JSON)
 -- 2 -> reservation key
 -- 3 -> idempotency key
 
@@ -8,13 +8,18 @@
 -- 2 -> reservationId
 -- 3 -> userId
 -- 4 -> concertId
--- 5 -> ttl (seconds)
+-- 5 -> ttl
 
-local stock = tonumber(redis.call("GET", KEYS[1]))
-
-if not stock then
-  print("stock is" , stock);
+local concertJson = redis.call("GET", KEYS[1])
+if not concertJson then
   return { err = "STOCK_NOT_INITIALIZED" }
+end
+
+local concert = cjson.decode(concertJson)
+local available = tonumber(concert.availableTickets)
+
+if not available then
+  return { err = "INVALID_STOCK_DATA" }
 end
 
 local existing = redis.call("GET", KEYS[3])
@@ -22,11 +27,13 @@ if existing then
   return { "IDEMPOTENT", existing }
 end
 
-if stock < tonumber(ARGV[1]) then
+local qty = tonumber(ARGV[1])
+if available < qty then
   return { err = "INSUFFICIENT_STOCK" }
 end
 
-redis.call("DECRBY", KEYS[1], ARGV[1])
+concert.availableTickets = available - qty
+redis.call("SET", KEYS[1], cjson.encode(concert))
 
 redis.call("HSET", KEYS[2],
   "reservationId", ARGV[2],
