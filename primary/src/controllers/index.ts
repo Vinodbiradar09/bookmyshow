@@ -252,9 +252,6 @@ const ticketBooking = async (req: Request, res: Response) => {
       });
     }
 
-    /* ------------------------------------------------
-       🔐 REDIS CLUSTER HASH TAG (CRITICAL)
-    ------------------------------------------------ */
     const hashTag = `{concert:${concertId}}`;
 
     const stockKey = `${hashTag}:stock`;
@@ -262,9 +259,6 @@ const ticketBooking = async (req: Request, res: Response) => {
     const reservationKey = `${hashTag}:reservation:${reservationId}`;
     const idemKey = `${hashTag}:idempotency:${idempotencyKey}`;
 
-    /* ------------------------------------------------
-       📦 LAZY STOCK INIT
-    ------------------------------------------------ */
     let cachedConcert = await redis.get(stockKey);
 
     if (!cachedConcert) {
@@ -293,9 +287,6 @@ const ticketBooking = async (req: Request, res: Response) => {
 
     const ttl = 300;
 
-    /* ------------------------------------------------
-       ⚡ ATOMIC RESERVATION (LUA)
-    ------------------------------------------------ */
     const result = await redis.eval(
       luaScripts.reserveTickets,
       3,
@@ -875,12 +866,13 @@ const createConcert = async (req: Request, res: Response) => {
       }
     });
     try {
-        await Promise.all([
-        await redis.set(`concert:${concert.id}:stock`, JSON.stringify(concert)),
+       const [p1 , p2 , p3 , p4 ] =  await Promise.all([
+        await redis.set(`concert:${concert.id}:stock`, (concert.availableTickets)),
         await redis.del("concerts:all"),
         await redis.del("recent:concerts"),
         await deleteByPattern("concerts:filter"),
       ]);
+      console.log("p2pp2" , p1 ,p2 , p3 , p4);
     } catch (redisError) {
       // rollback db
       await prisma.concert.delete({
