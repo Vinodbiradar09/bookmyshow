@@ -464,10 +464,11 @@ const availableTickets = async (req: Request, res: Response) => {
     // check the redis first
     const tickets = await redis.get(`concert:${concertId}:stock`);
     if (tickets) {
+      console.log("titit" , tickets);
       return res.status(200).json({
         message: "the available tickets",
         success: true,
-        availableTickets: tickets,
+        concert: tickets,
       });
     }
     const concert = await prisma.concert.findUnique({

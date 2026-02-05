@@ -82,7 +82,7 @@ const Concert = ({ params }: { params: Promise<{ id: string }> }) => {
           },
         );
         if (response.data.success && response.status === 200) {
-          setAvailableTickets(response.data.availableTickets);
+          setAvailableTickets(response.data.concert.availableTickets);
         } else {
           setError(response.data.message);
         }
